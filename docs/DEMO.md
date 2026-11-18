@@ -7,7 +7,7 @@ from the author.
 ## The bot
 
 - **Three server-side accounts**, generated once and kept in the site's environment (never in the repository):
-  `DEMO_BUYER`, `DEMO_RIVAL_A` and `DEMO_RIVAL_B`. A single `DEMO_PROVIDER_KEY` derives all three, so there is
+  `DEMO_BUYER`, `DEMO_RIVAL_A` and `DEMO_RIVAL_B`. A single `DEMO_KEY` derives all three, so there is
   one secret to set. `/api/demo/status` reports each account's balance and whether the bot is online. A
   submission is not final until this reports `online`.
 - **One fixed demonstration tender** with real content, not placeholders: "Repaint Elm Street Primary
