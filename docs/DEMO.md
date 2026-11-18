@@ -29,9 +29,11 @@ from the author.
 4. Once reveals close, the server calls `assess()` on every revealed bid, including the visitor's, so the
    visitor never has to work out what to do next. The visitor can also press "Assess my bid" themselves.
 5. If the visitor's bid reads short of all `MEETS`, the page offers the one appeal, with the window counting
-   down.
+   down. If a rival's bid reads all `MEETS`, the page offers one challenge of it in that rival's window. The
+   server places every compliant bid with the hint it reads from `bids_of()`, so the visitor never has to.
 6. When `tender().award_ready` is true, the server calls `award()`. If the visitor wins, the server waits a short
-   moment and calls `complete()` as the buyer, so the visitor sees the payment arrive.
+   moment and calls `complete()` as the buyer, so the visitor sees the payment arrive. Then it calls `reclaim()`
+   on every held bond, the visitor's included.
 
 ## Visitor as buyer
 
@@ -43,8 +45,9 @@ The visitor watches the award go to the cheapest compliant rival and the remaind
 
 - At most one demo tender per visitor address at a time, and a small daily cap per client address, because
   addresses cost nothing to make.
-- The bot only ever signs these calls: `open_tender`, `bid`, `reveal`, `assess`, `award` and `complete`, on
-  tenders it opened or bid on. It never calls `dispute`, `waive` or `withdraw` on a visitor's behalf.
+- The bot only ever signs these calls: `open_tender`, `bid`, `reveal`, `assess`, `place`, `award`, `complete`
+  and `reclaim`, on tenders it opened or bid on. It never challenges or appeals: a second look is the visitor's
+  to choose. It never calls `dispute`, `waive` or `withdraw` on a visitor's behalf.
 - The bot's budget is small (about 1.5 GEN per demo tender). When its balance is low, `/api/demo/status` reports
   `offline` and the page says so, rather than failing halfway through.
 
@@ -58,8 +61,10 @@ clock → lines), unit-tested for each phase and role, covers:
 |---|---|
 | `bidding` | your bid is sealed; nobody can see your price; bidding closes in mm:ss; you can leave; your bond is held by the contract |
 | `revealing` | reveal now, or your bond goes to the buyer; closes in mm:ss; your salt is saved in this browser |
-| `reviewing` | the network is reading each proposal; about a minute per bid; nothing needed from you; your bond is back in your credit |
+| `reviewing` | the network is reading each proposal; about a minute per bid; nothing needed from you; your bond is held until the award |
 | appeal window open | your bid read short on requirement k; you may appeal once within mm:ss; the appeal bond comes from your credit |
+| challenge window open | a rival's bid reads all MEETS; you may challenge it once within mm:ss; a knockout pays you its bond, an upheld challenge pays yours to it |
+| your bid is challenged | a rival asked the network to look again; about a minute; nothing needed from you; your bond is held until the award |
 | `ready_to_award` | anyone can now award; the bot will do it within a minute |
 | `awarded` | the winner's price is held; the buyer releases it, or the winner can claim it from a date shown |
 | `paid` / `no_award` / `waived` | closed; where every atto went |

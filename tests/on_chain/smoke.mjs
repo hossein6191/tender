@@ -19,15 +19,20 @@
  *      its own tender: refused, the bond returned. No model runs in any of these.
  *   4  bidding closes on the chain's clock. STRANGER bids late: refused, the bond returned.
  *   5  reveals. CHEAP reveals with the wrong salt: refused. CHEAP reveals again, correctly. MIDDLE and DEAR
- *      reveal. STRANGER reveals 1.5 GEN: recorded as over_budget, which cannot win. Every bond is back in credit.
+ *      reveal; their bonds stay held until the award. STRANGER reveals 1.5 GEN: recorded as over_budget, which
+ *      cannot win, and its bond is back in credit at once.
  *   6  reveals close. STRANGER tries to award T1: refused, three revealed bids are not assessed yet.
  *   7  three consensus rounds, one bid each, both orders. CHEAP's proposal says "standard acrylic emulsion" and
- *      nothing about low-VOC paint: MEETS,MISSES,MEETS. MIDDLE and DEAR: MEETS,MEETS,MEETS. MIDDLE leads.
- *   8  CHEAP appeals once with a reason: the same questions with the reason as a BIDDER_NOTE, which the prompt
- *      says does not count as part of the proposal. Upheld: the appeal bond goes to BUYER in the same call.
+ *      nothing about low-VOC paint: MEETS,MISSES,MEETS. MIDDLE and DEAR: MEETS,MEETS,MEETS. MIDDLE goes to the
+ *      head of the ordered list; STRANGER places DEAR after it, and a wrong hint (DEAR at the head) is refused.
+ *   8  each second look goes in right after the assessment that opens its twenty-minute window. CHEAP appeals
+ *      once: the same questions with its reason as a BIDDER_NOTE, which the prompt says does not count as part
+ *      of the proposal. Upheld: the bond goes to BUYER. DEAR challenges MIDDLE, the leader: the same questions
+ *      with its reason as a CHALLENGER_NOTE. Upheld: no requirement reads MISSES, MIDDLE keeps the lead and
+ *      DEAR's bond goes to MIDDLE's credit. (CHEAP and DEAR deposit these bonds during step 3.)
  *   9  the appeal window passes and STRANGER awards T1: MIDDLE wins at 0.8 GEN, the cheapest bid that meets every
  *      requirement, and 0.4 GEN goes back to BUYER in the same call. BUYER releases the 0.8 GEN to MIDDLE.
- *      Every bidder withdraws its credit.
+ *      STRANGER reclaims the three held bonds to their bidders' credit, and every bidder withdraws its credit.
  *  10  the views read back, the code deployed compared with the file byte for byte, the contract's balance
  *      read, and every account's net movement checked against what the receipts say.
  *
@@ -38,7 +43,7 @@
  * continues without sending anything twice. Every id (T1, B1 to B4, the contract address) is read from the
  * receipt that created it, never assumed. Waits are measured on the chain's own clock: the tender and stats
  * views report the message clock as `now`. A whole run takes about 70 to 100 minutes, most of it the windows:
- * one deployment and 26 transactions, four of them consensus rounds of two askings each.
+ * one deployment and 36 transactions, five of them consensus rounds of two askings each.
  *
  * A state file remembers the sha256 of the contract it deployed, and a RESUME against a state made from
  * another file stops before sending anything.
@@ -98,8 +103,8 @@ const ROLES = {
   buyer: "a primary school; opens the classroom tender, is refused a bid on it, releases the payment",
   cheap: "the cheapest painter, whose proposal never commits to low-VOC paint; appeals once",
   middle: "a painter whose proposal meets every requirement; bids from credit",
-  dear: "the dearest painter, whose proposal also meets every requirement",
-  stranger: "bids over the budget and after the deadline, awards the tender, tries to release its payment",
+  dear: "the dearest painter, whose proposal also meets every requirement; challenges the leader once",
+  stranger: "bids over the budget and after the deadline, assesses, places, awards, reclaims, tries to release the payment",
 };
 const acct = {}, client = {};
 for (const k of Object.keys(ROLES)) { acct[k] = createAccount(st.keys[k]); client[k] = createClient({ chain: studionet, account: acct[k] }); }
@@ -261,6 +266,7 @@ const P_MIDDLE = "We will paint all 12 classrooms, walls and ceilings, using onl
 const P_DEAR = "Our crew will repaint all 12 classrooms with low-VOC certified paint, two coats on walls and ceilings, starting 21 July and finishing within the summer break.";
 const P_OVER = "We will paint all 12 classrooms with low-VOC paint and finish within the summer break, with a five-year guarantee.";
 const REASON = "Standard acrylic emulsion is low in solvents, so the paint we name is low-VOC paint.";
+const CHALLENGE = "Water-based paint is not always low-VOC, so this proposal never commits to requirement 2.";
 const commitment = (price, proposal, salt) => sha(`${price}|${proposal}|${salt}`);
 const bidderOf = {};   // bid id -> the role that made it, read off the bid receipts
 
@@ -308,6 +314,10 @@ const bids = {};
   const c4 = await call("bid_stranger", "stranger", "bid", [T1, commitment(P_OVER_PRICE, P_OVER, st.salts.stranger)], { value: BOND, watch: ["stranger"], expect: { stranger: -BOND } });
   bids.stranger = need(c4.j?.bid, "STRANGER's bid id"); bidderOf[bids.stranger] = "stranger";
   ok(`STRANGER commits ${bids.stranger}; its price is sealed, so nobody can tell yet that it is over the budget`, c4.j?.ok === true, votes(c4));
+  for (const who of ["cheap", "dear"]) {
+    const e = await call("deposit_" + who, who, "deposit", [], { value: BOND, watch: [who], expect: { [who]: -BOND } });
+    ok(`${who.toUpperCase()} deposits 0.05 GEN of credit, ready for an appeal or a challenge bond`, e.j?.ok === true && moved(e, who, -BOND), votes(e));
+  }
   const b = await call("bid_buyer", "buyer", "bid", [T1, commitment(1n, P_CHEAP, st.salts.cheap)], { value: BOND, watch: ["buyer"], expect: { buyer: 0n } });
   ok("BUYER tries to bid on its own tender: refused, recorded, and the bond returned", b.j?.ok === false && String(b.j?.reason).includes("may not bid on it") && moved(b, "buyer", 0n), votes(b));
 }
@@ -327,7 +337,7 @@ console.log(`\n[${stamp()}] ---- 5: reveals`);
   ok("CHEAP reveals with the wrong salt: refused, nothing stored", refused(w, "do not match the commitment"), w.msg.slice(0, 120));
   for (const [who, price, text] of [["cheap", P_CHEAP_PRICE, P_CHEAP], ["middle", P_MIDDLE_PRICE, P_MIDDLE], ["dear", P_DEAR_PRICE, P_DEAR]]) {
     const r = await call("reveal_" + who, who, "reveal", [bids[who], String(price), text, st.salts[who]]);
-    ok(`${who.toUpperCase()} reveals ${bids[who]} at ${Number(price) / 1e18} GEN; the bond is back in credit`, r.j?.ok === true && r.j?.status === "revealed" && r.j?.credit === String(BOND), votes(r));
+    ok(`${who.toUpperCase()} reveals ${bids[who]} at ${Number(price) / 1e18} GEN; its bond stays held until the award`, r.j?.ok === true && r.j?.status === "revealed" && r.j?.bond_held_until === "the tender is decided", votes(r));
   }
   const o = await call("reveal_over", "stranger", "reveal", [bids.stranger, String(P_OVER_PRICE), P_OVER, st.salts.stranger]);
   ok(`STRANGER reveals ${bids.stranger} at 1.5 GEN: recorded as over_budget, so it cannot win`, o.j?.ok === false && o.j?.status === "over_budget" && String(o.j?.reason).includes("over the budget"), votes(o));
@@ -342,22 +352,30 @@ await untilPast(revealBy, "reveals to close");
 }
 
 // ================================================================ 7
-console.log(`\n[${stamp()}] ---- 7: three assessments, one bid per transaction, both orders`);
+console.log(`\n[${stamp()}] ---- 7: three assessments, one bid per transaction, both orders; one appeal, one challenge`);
 const masks = {};
-for (const who of ["cheap", "middle", "dear"]) {
-  const r = await call("assess_" + who, "stranger", "assess", [bids[who]]);
-  masks[who] = r.j?.mask;
-  console.log(`      ${who.toUpperCase()} ${bids[who]}: ${r.j?.mask}  (${votes(r)})`);
-}
-ok("CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint", masks.cheap === "MEETS,MISSES,MEETS", masks.cheap);
-ok("MIDDLE reads MEETS,MEETS,MEETS", masks.middle === "MEETS,MEETS,MEETS", masks.middle);
-ok("DEAR reads MEETS,MEETS,MEETS", masks.dear === "MEETS,MEETS,MEETS", masks.dear);
-
-// ================================================================ 8
-console.log(`\n[${stamp()}] ---- 8: CHEAP appeals once`);
 {
+  const a = await call("assess_cheap", "stranger", "assess", [bids.cheap]);
+  masks.cheap = a.j?.mask;
+  ok("CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint", masks.cheap === "MEETS,MISSES,MEETS", `${masks.cheap} (${votes(a)})`);
+  // the appeal right away, inside CHEAP's twenty-minute window
   const r = await call("appeal_cheap", "cheap", "appeal", [bids.cheap, REASON], { watch: ["cheap", "buyer"], expect: (j) => j?.appeal === "upheld" ? { cheap: 0n, buyer: BOND } : { cheap: 0n, buyer: 0n } });
-  ok("the appeal is upheld: the reason is not part of the proposal, and the 0.05 GEN appeal bond reaches BUYER from CHEAP's credit", r.j?.appeal === "upheld" && r.j?.bond_to === "buyer" && moved(r, "buyer", BOND), `${r.j?.appeal} ${r.j?.appeal_mask} (${votes(r)})`);
+  ok("CHEAP's appeal is upheld: the reason is not part of the proposal, and the 0.05 GEN appeal bond reaches BUYER from CHEAP's credit", r.j?.appeal === "upheld" && r.j?.bond_to === "buyer" && moved(r, "buyer", BOND), `${r.j?.appeal} ${r.j?.appeal_mask} (${votes(r)})`);
+  const b = await call("assess_middle", "stranger", "assess", [bids.middle]);
+  masks.middle = b.j?.mask;
+  ok("MIDDLE reads MEETS,MEETS,MEETS and goes to the head of the ordered list", masks.middle === "MEETS,MEETS,MEETS" && b.j?.placed === true && b.j?.leader === bids.middle, `${masks.middle} (${votes(b)})`);
+  // the challenge right away, inside MIDDLE's twenty-minute window
+  const c = await call("challenge_middle", "dear", "challenge", [bids.middle, CHALLENGE]);
+  ok("DEAR's challenge of MIDDLE is upheld: no requirement reads MISSES, MIDDLE keeps the lead, and DEAR's 0.05 GEN bond goes to MIDDLE's credit", c.j?.challenge === "upheld" && c.j?.bond_to === "bidder" && c.j?.leader === bids.middle && c.j?.credit === "0", `${c.j?.challenge} ${c.j?.challenge_mask} (${votes(c)})`);
+  const m = await read("credit", [acct.middle.address]);
+  ok("MIDDLE's credit now holds DEAR's challenge bond", m.credit === String(BOND), JSON.stringify(m));
+  const d = await call("assess_dear", "stranger", "assess", [bids.dear]);
+  masks.dear = d.j?.mask;
+  ok("DEAR reads MEETS,MEETS,MEETS; dearer than the leader, it waits to be placed", masks.dear === "MEETS,MEETS,MEETS" && d.j?.placed === false, `${masks.dear} (${votes(d)})`);
+  const w = await call("place_wrong", "stranger", "place", [bids.dear, ""]);
+  ok("STRANGER tries to place DEAR at the head, ahead of the cheaper MIDDLE: refused", refused(w, "does not come before the leader"), w.msg.slice(0, 120));
+  const p = await call("place_dear", "stranger", "place", [bids.dear, bids.middle]);
+  ok("STRANGER places DEAR after MIDDLE; the contract checks both neighbours; MIDDLE leads", p.j?.ok === true && p.j?.leader === bids.middle && p.j?.placed === 2, votes(p));
 }
 
 // ================================================================ 9
@@ -371,9 +389,15 @@ console.log(`\n[${stamp()}] ---- 9: the award and the payment`);
   ok("STRANGER tries to release the payment: refused, only the buyer", refused(n, "only the buyer"), n.msg.slice(0, 100));
   const c = await call("complete", "buyer", "complete", [T1], { watch: ["middle"], expect: { middle: P_MIDDLE_PRICE } });
   ok("BUYER releases the 0.8 GEN to MIDDLE", c.j?.status === "paid" && moved(c, "middle", P_MIDDLE_PRICE), votes(c));
-  for (const who of ["middle", "dear", "stranger"]) {
-    const w = await call("withdraw_" + who, who, "withdraw", [String(BOND)], { watch: [who], expect: { [who]: BOND } });
-    ok(`${who.toUpperCase()} withdraws its 0.05 GEN bond from credit`, w.j?.ok === true && moved(w, who, BOND), votes(w));
+  const early = await call("reclaim_none", "stranger", "reclaim", [bids.stranger]);
+  ok("STRANGER tries to reclaim its over-budget bid's bond again: refused, it went back to credit at the reveal", refused(early, "holds no bond to reclaim"), early.msg.slice(0, 100));
+  for (const who of ["cheap", "middle", "dear"]) {
+    const r = await call("reclaim_" + who, "stranger", "reclaim", [bids[who]]);
+    ok(`STRANGER reclaims ${bids[who]}: its 0.05 GEN bond goes to ${who.toUpperCase()}'s credit`, r.j?.ok === true && r.j?.bond === String(BOND), votes(r));
+  }
+  for (const [who, amount] of [["cheap", BOND], ["middle", 2n * BOND], ["dear", BOND], ["stranger", BOND]]) {
+    const w = await call("withdraw_" + who, who, "withdraw", [String(amount)], { watch: [who], expect: { [who]: amount } });
+    ok(`${who.toUpperCase()} withdraws ${Number(amount) / 1e18} GEN of credit`, w.j?.ok === true && moved(w, who, amount), votes(w));
   }
 }
 
@@ -381,13 +405,13 @@ console.log(`\n[${stamp()}] ---- 9: the award and the payment`);
 console.log(`\n[${stamp()}] ---- 10: views, code and money`);
 {
   const t = await seen("tender_end", "tender", [T1]);
-  ok("tender(T1): paid, four bids, three eligible, one over budget, three assessed, two compliant, one appeal", t.status === "paid" && t.bids === 4 && t.eligible === 3 && t.over_budget === 1 && t.assessed === 3 && t.compliant === 2 && t.appeals === 1 && t.winner?.bid === bids.middle, JSON.stringify(t).slice(0, 200));
+  ok("tender(T1): paid, four bids, three eligible, one over budget, three assessed, two compliant, one appeal, one challenge", t.status === "paid" && t.bids === 4 && t.eligible === 3 && t.over_budget === 1 && t.assessed === 3 && t.compliant === 2 && t.appeals === 1 && t.challenges === 1 && t.winner?.bid === bids.middle, JSON.stringify(t).slice(0, 200));
   const page = await seen("bids_end", "bids_of", [T1, 0, 20]);
   ok("bids_of(T1): every bid with its price, proposal, salt, mask and fingerprint", page.total === 4 && page.rows?.every((r) => r.commitment === commitment(BigInt(r.price), r.proposal, r.salt)), JSON.stringify(page.rows?.map((r) => r.status + " " + r.mask)));
   const rules = await seen("rules", "rules", []);
-  ok("rules(): the question word for word, both orders, the combine table and the limits", String(rules.question).startsWith("Does the PROPOSAL commit to requirement {k}?") && rules.askings?.length === 2 && String(rules.compared).includes("exact string equality") && String(rules.limits?.[0]).includes("does not judge the work"), Object.keys(rules).join(","));
+  ok("rules(): the question word for word, both orders, the combine table and the limits", String(rules.question).startsWith("Does the PROPOSAL commit to requirement {k}?") && rules.askings?.length === 2 && String(rules.compared).includes("exact string equality") && String(rules.limits?.[0]).includes("does not judge the work") && String(rules.challenge).includes("knocks the bid out"), Object.keys(rules).join(","));
   const stats = await seen("stats", "stats", []);
-  ok("stats(): one tender, four bids, one awarded and paid, three assessed, one appeal, nothing held", stats.tenders === 1 && stats.bids === 4 && stats.paid === 1 && stats.assessed === 3 && stats.appeals === 1 && stats.balance_owed === "0", JSON.stringify(stats));
+  ok("stats(): one tender, four bids, one awarded and paid, three assessed, one appeal, one challenge, nothing held", stats.tenders === 1 && stats.bids === 4 && stats.paid === 1 && stats.assessed === 3 && stats.appeals === 1 && stats.challenges === 1 && stats.knocked_out === 0 && stats.balance_owed === "0", JSON.stringify(stats));
   ok("the contract's own balance is zero", (await balance(st.contract)) === 0n, String(await balance(st.contract)));
 
   const bytes = readFileSync(FILE);
@@ -413,13 +437,13 @@ console.log(`\n[${stamp()}] ---- 10: views, code and money`);
     if (s.fn === "appeal" && j.appeal === "upheld") want.buyer += BigInt(j.bond);
   }
   const net = (k) => BigInt(st.end[k]) - BigInt(st.start[k]);
-  ok("over the run every account ends exactly where the receipts say: MIDDLE 0.8 GEN up, CHEAP 0.05 GEN down (its upheld appeal), BUYER 0.75 GEN down", Object.keys(want).every((k) => net(k) === want[k]) && want.middle === P_MIDDLE_PRICE && want.cheap === -BOND && want.buyer === BOND - P_MIDDLE_PRICE && want.dear === 0n && want.stranger === 0n, Object.keys(want).map((k) => k.toUpperCase() + " " + Number(net(k)) / 1e18 + " (receipts " + Number(want[k]) / 1e18 + ")").join("  "));
+  ok("over the run every account ends exactly where the receipts say: MIDDLE 0.85 GEN up (the price and DEAR's challenge bond), CHEAP and DEAR 0.05 GEN down (their upheld appeal and challenge), BUYER 0.75 GEN down", Object.keys(want).every((k) => net(k) === want[k]) && want.middle === P_MIDDLE_PRICE + BOND && want.cheap === -BOND && want.dear === -BOND && want.buyer === BOND - P_MIDDLE_PRICE && want.stranger === 0n, Object.keys(want).map((k) => k.toUpperCase() + " " + Number(net(k)) / 1e18 + " (receipts " + Number(want[k]) / 1e18 + ")").join("  "));
 }
 
 st.checks = { pass, fail }; save();
 console.log(`\n${pass} passed, ${fail} failed`);
 console.log("Tender:", st.contract);
 console.log("transactions:", st.order.reduce((n, id) => n + st.steps[id].tries.length, 0), "in", st.order.length, "steps; sent a second time:", st.order.filter((id) => st.steps[id].tries.length > 1).join(", ") || "none");
-for (const id of st.order) { const s = st.steps[id], j = jsonOf(s.tries.at(-1)?.msg || ""); if (j?.mask || j?.appeal) console.log(`${id.padEnd(18)} ${s.tries.map((t) => t.tx + " " + tally(t.votes)).join(" | ")}  ${j.bid} ${j.appeal || ""} ${j.mask}`); }
+for (const id of st.order) { const s = st.steps[id], j = jsonOf(s.tries.at(-1)?.msg || ""); if (j?.mask || j?.appeal || j?.challenge) console.log(`${id.padEnd(18)} ${s.tries.map((t) => t.tx + " " + tally(t.votes)).join(" | ")}  ${j.bid} ${j.appeal || j.challenge || ""} ${j.mask}`); }
 console.log("record:", RECORD);
 process.exit(fail ? 1 : 0);

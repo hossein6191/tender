@@ -23,14 +23,17 @@ An Intelligent Contract on GenLayer, `contracts/tender.py`. One deployment holds
    `sha256(price_atto + "|" + proposal + "|" + salt)` and stakes the bid bond. The bond can go with the call or
    come from credit deposited earlier. Nobody can see a price or a proposal yet.
 3. **Bidders reveal.** Between the bidding and reveal deadlines, each bidder sends the price, the proposal and the
-   salt. The code checks them against the commitment and checks the price against the budget. The bond goes back
-   to the bidder's credit. A price over the budget is recorded as `over_budget` and cannot win. If a bid is never
-   revealed, its bond goes to the buyer.
+   salt. The code checks them against the commitment and checks the price against the budget. A price over the
+   budget is recorded as `over_budget`, cannot win, and its bond goes back to credit at once. A bid within budget
+   keeps its bond held until the tender is decided. If a bid is never revealed, its bond goes to the buyer.
 4. **Anyone assesses each bid, one bid per transaction.** The network decides, requirement by requirement,
    whether the proposal commits to it: `MEETS`, `MISSES` or `UNCLEAR`. That result is final.
-5. **A bidder whose bid fell short may appeal once**, within twenty minutes, with a short reason and a bond.
+5. **Each assessment opens a twenty-minute window for a second look, from either side.** A bidder whose bid
+   fell short may appeal once. A bid that meets every requirement may be challenged once, by the buyer or by
+   another bidder with a bid revealed within budget. Both stake a bond and give a short reason.
 6. **Anyone awards the tender once it is ready.** The cheapest bid with every requirement `MEETS` wins. If two
-   bids have the same price, the one committed first wins. The winner's price stays in escrow and the rest of
+   bids have the same price, the one committed first wins. Compliant bids are kept in a list ordered by price,
+   so the award only reads the first one. The winner's price stays in escrow and the rest of
    the budget goes back to the buyer. If no bid meets every requirement, the whole budget goes back.
 7. **Payment.** The buyer releases the price with `complete()`. If the buyer never does, the winner can claim it
    two days after the completion deadline. A buyer's `dispute()` only delays that claim by thirty days, to give
@@ -38,7 +41,7 @@ An Intelligent Contract on GenLayer, `contracts/tender.py`. One deployment holds
 
 ## How consensus is used
 
-Consensus is used in `assess()` and `appeal()`, and nowhere else. Prices, budgets and dates are never sent to the
+Consensus is used in `assess()`, `appeal()` and `challenge()`, and nowhere else. Prices, budgets and dates are never sent to the
 model. Code checks them.
 
 Each judgement is a single consensus block. Inside it the leader asks the model two prompts:
@@ -82,6 +85,14 @@ in the note does not count. If every requirement reads `MEETS`, the appeal is ov
 the bond stays with the bidder. Any other result upholds the assessment and the bond goes to the buyer. Each bid
 can be appealed once, so nobody can keep asking until the answer suits them.
 
+**The challenge.** A challenge is the same pair of askings with the challenger's reason in a CHALLENGER_NOTE
+block. The prompt says this note is not part of the proposal and is not evidence. If at least one requirement
+reads `MISSES` (that is, `MISSES` in both orders), the bid is knocked out. Its mask is replaced, the old mask is
+kept on the record as `replaced_mask`, the bid leaves the ordered list (so the next compliant bid leads), and the
+challenger keeps its own bond and also takes the bid's bond. Any other result, including `UNCLEAR`, upholds the
+bid, and the challenger's bond goes to the challenged bidder. Doubt favours the bid that was already judged
+compliant. Each bid can be challenged once, and a bid that was knocked out cannot then be appealed.
+
 `rules()` publishes the question, the prompt text word for word, the combine table, the comparison and the limits.
 
 ## Who may do what
@@ -96,6 +107,9 @@ can be appealed once, so nobody can keep asking until the answer suits them.
 | `forfeit(bid)` | anyone; the bond goes only to the buyer | from `reveal_by`, for a bid never revealed |
 | `assess(bid)` | anyone; the network decides, not the caller | after the reveal, before `review_by`, once |
 | `appeal(bid, reason)` | only that bid's bidder, once | within 20 minutes of the assessment |
+| `challenge(bid, reason)` | the buyer, or another bidder with a bid revealed within budget; once per bid | within 20 minutes of the bid becoming compliant, before the award |
+| `place(bid, after)` | anyone; the contract checks the order | a compliant bid not yet in the list, before the award |
+| `reclaim(bid)` | anyone; the bond goes only to its bidder's credit | after the award |
 | `award(tender)` | anyone; the rule picks the winner | see below |
 | `complete(tender)` | only the buyer | after the award |
 | `dispute(tender)` | only the buyer, once | before `complete_by` + 2 days |
@@ -104,29 +118,39 @@ can be appealed once, so nobody can keep asking until the answer suits them.
 
 `award()` is ready when all three of these are true:
 - the reveal deadline has passed;
-- every appeal window has closed;
-- every bid revealed within budget has been assessed, or the review deadline has passed.
+- every appeal and challenge window has closed;
+- every bid revealed within budget has been assessed, or the review deadline has passed;
+- every compliant bid has been placed in the ordered list.
+
+A compliant bid that beats the current leader goes to the head of the list as soon as it is judged. Any other
+compliant bid is placed with `place(bid, after)`, where `after` is the placed bid it follows. The site reads that
+from `bids_of()`. The contract checks the bid against both neighbours, so a wrong hint is refused.
 
 After the review deadline, a bid nobody assessed cannot win. Anyone can assess any bid, including the bidder, so
 no party can keep a bid out by refusing to ask.
 
-The buyer has no call that touches a mask, the current leader or the winner. A test lists every write that does
+Apart from a challenge, which is judged by the network like any other assessment, the buyer has no call that
+touches a mask, the current leader or the winner. A test lists every write that does
 not check its sender, with the reason it is open. Any write added later that is not on that list fails the test.
 
 ## The money
 
 - **Budget:** 0.1 to 1000 GEN, sent with `open_tender()` and held in escrow. At the award, the winner's price
   stays and the rest goes back to the buyer in the same call.
-- **Bid bond:** set by the buyer, 0.01 to 10 GEN. It goes back to the bidder's credit when the bid is revealed,
-  even when the price is over budget. A bid that is never revealed gives its bond to the buyer. So a bidder who
-  commits several prices and reveals only the useful one pays a bond for each one hidden.
+- **Bid bond:** set by the buyer, 0.01 to 10 GEN. A bid over budget gets it back in credit at the reveal. A bid
+  within budget keeps it held until the tender is decided, then anyone can `reclaim()` it to the bidder's credit.
+  A bid knocked out by a challenge loses it to the challenger. A bid that is never revealed loses it to the buyer,
+  so a bidder who commits several prices and reveals only the useful one pays a bond for each one hidden.
 - **Appeal bond:** equal to the bid bond, taken from credit. Overturned: it stays. Upheld: it goes to the buyer.
+- **Challenge bond:** equal to the bid bond, taken from credit. Knockout: it stays, and the challenged bid's bond
+  is added to it. Upheld: it goes to the challenged bidder's credit. A challenge makes no transfer.
 - **Payment:** the price goes to the winner through `complete()` or `claim_payment()`, or back to the buyer
   through `waive()`.
 - **Refusals:** a refused `deposit()`, `open_tender()` or `bid()` sends back everything that came with it and
   records the refusal. Every other refusal raises, and a refused call took nothing.
 - **Constant work:** every call settles one bid or one tender and makes at most one transfer. No call loops over
-  the bids. The leader is updated each time a bid is judged, so `award()` reads no list. Views page at 20 rows.
+  the bids. Compliant bids sit in a linked list ordered by price: each insertion is checked against its two
+  neighbours, each knockout joins them, and `award()` reads only the head. There is no cap on the number of bids. Views page at 20 rows.
 - No floats anywhere. Amounts are integers in atto.
 
 ## Limits, stated plainly
@@ -136,8 +160,12 @@ not check its sender, with the reason it is open. Any write added later that is 
 - It judges what a proposal **commits to**, not whether the bidder will keep that promise.
 - The buyer writes the requirements, so a buyer could write them to suit one bidder. They are public from the
   moment the tender opens, so anyone can see that happening.
-- Nobody can challenge a lenient `MEETS` on a rival's bid. Only the bidder can appeal, and only a bid that fell
-  short of all `MEETS`.
+- Each bid gets at most two second looks: its bidder's appeal, then one challenge if that appeal made it
+  compliant. A bid that was knocked out cannot be appealed. Otherwise the two sides could take turns forever.
+- A challenge has to show a requirement `MISSES` in both orders. An `UNCLEAR` result does not knock a bid out.
+- A revealed bid's bond is locked until the award, so that a knockout can pay the challenger from it.
+- Each compliant bid that is not the cheapest so far needs its own `place()` call before the award. Anyone can
+  send it.
 - A bid nobody assesses before the review deadline cannot win.
 - The buyer could bid through another address. The rule still gives the award to the cheapest compliant bid.
 - After an appeal is decided, the award still waits for that bid's twenty-minute window to close.
@@ -159,9 +187,9 @@ not check its sender, with the reason it is open. Any write added later that is 
 
 ```
 pip install -r requirements-dev.txt
-pytest tests/ -q                       # 181 passed, no network
+pytest tests/ -q                       # 207 passed, no network
 genvm-lint check contracts/tender.py   # Lint passed (3 checks), Validation passed
-python tools/mutate.py                 # 140 / 140 killed, rewrites tests/MUTATIONS.md
+python tools/mutate.py                 # 190 / 190 killed, rewrites tests/MUTATIONS.md
 npm ci && node tests/on_chain/smoke.mjs   # the on-chain walk; deploys its own copy
 ```
 
@@ -170,7 +198,9 @@ cheapest, at 0.6 GEN, never commits to low-VOC paint and reads `MEETS,MISSES,MEE
 meets every requirement and wins. The dearest, at 1.0 GEN, also meets every requirement. Along the way it sends
 the refusals and checks that each one is refused: a tender under the budget floor, the buyer bidding on its own
 tender, a late bid, a reveal with the wrong salt, a price over the budget, and an award before any assessment.
-The cheapest bidder also appeals once, and the appeal is upheld.
+The cheapest bidder appeals once, and the appeal is upheld. The dearest bidder challenges the winner once, and
+the challenge is upheld: no requirement reads `MISSES`, the winner keeps the lead, and the challenger's bond goes
+to the winner. A wrong placement hint is refused, and the held bonds are reclaimed after the award.
 
 ## Evidence
 

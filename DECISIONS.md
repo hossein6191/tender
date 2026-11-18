@@ -37,34 +37,83 @@ upholds, and the bond goes to the buyer, who is the one party the appeal delays.
 the assessment, and the award waits for it. So the appeal can always be reached before the award, which is the
 gap other tender designs have been rejected for.
 
-## Anyone may assess and anyone may award
+## Anyone may assess, place and award
 
 If only the buyer could call `assess()`, the buyer could refuse to assess the cheaper bid. If only the buyer
-could call `award()`, the buyer could hold the result back. Both calls are open. The caller chooses nothing: the
-network sets the mask, the rule picks the winner, and the money goes only to the buyer or the held price. The
-static sender test lists both calls as deliberately open, with this reason.
+could call `award()`, the buyer could hold the result back. The same goes for `place()` and `reclaim()`. All
+four calls are open. The caller chooses nothing: the network sets the mask, the contract checks every placement,
+the rule picks the winner, and the money goes only to the buyer, the held price or the bid's own bidder. The
+static sender test lists each of these calls as deliberately open, with its reason.
 
-## No cap on bids, and an award that reads no list
+## A second look from either side
 
-A cap on bids is an entry door that a stranger with spare addresses could fill and shut on everybody else. Tender
-has no cap. Instead, the leader (the cheapest bid judged all `MEETS` so far, with ties going to the earlier
-commitment) is updated each time a bid is assessed or an appeal is overturned. `award()` only compares counters
-and the clock, then reads that one leader. Masks only ever move toward compliance (an overturned appeal), so
-keeping a running minimum is exact. Bonds go back to credit when a bid is revealed, and unrevealed bonds are
-forfeited one bid at a time. So no call refunds a list. The cost is that each bid needs its own `assess()`
-transaction, which anyone can send.
+An appeal only helps a bidder that the network read too harshly. A bid read too leniently would be safe from
+everyone, and the cheapest lenient `MEETS` would win. So the same twenty-minute window that every assessment
+opens can be used in either direction. The bidder may appeal a mask short of all `MEETS`. The buyer, or another
+bidder with a bid revealed within budget, may challenge a mask of all `MEETS`. Both take a bond equal to the bid
+bond, both give a reason the prompt says is not part of the proposal, and both are asked as the same pair of
+orders.
+
+The bars are deliberately different. An appeal overturns only on all `MEETS`. A challenge knocks a bid out only
+when some requirement reads `MISSES` in both orders; an `UNCLEAR` result does not. Either way the burden is on
+the side asking for the change, and doubt favours the result already stored. Only a bidder with something to
+lose can challenge (a revealed bid within budget, or the buyer), so a stranger cannot challenge every compliant
+bid for free. Each bid can be challenged once.
+
+A knockout pays the challenger the bid's whole bond as well as returning its own. That is what makes a correct
+challenge worth sending. To make that payment possible, a bid within budget keeps its bond held until the tender
+is decided, and `reclaim()` returns it afterwards. An upheld challenge pays the challenger's bond to the
+challenged bidder, who is the one the challenge put at risk. No challenge makes a transfer; both bonds move
+between credits.
+
+A bid that was knocked out cannot be appealed. Its bidder already had the assessment, and possibly an appeal,
+and the knockout needed `MISSES` in both orders. Allowing an appeal after a knockout would let the two sides take
+turns until the tender's clock ran out. The cost is that a bidder whose bid was compliant from the start never
+answers a challenge. That is stated as a limit.
+
+An overturned appeal makes a bid compliant, so it opens its own twenty-minute challenge window, and the award
+waits for that as well. The longest chain is assessment, then appeal, then challenge. That is bounded: an
+assessment comes before `review_by`, so every window has closed by `review_by` plus forty minutes.
+
+## The leader is a checked, ordered list: no cap, no recompute
+
+Once a challenge can knock out the leader, a running minimum is not enough: knowing who led tells you nothing
+about who comes next. I looked at the two options suggested:
+
+- **A bounded "best two or three".** If more bids are knocked out than the list holds, the true next leader is
+  lost. That is only honest with a cap on knockouts, which strangers would decide.
+- **Recomputing over a bounded list of bids.** That needs a cap on bids, and a cap is an entry door that a
+  stranger with spare addresses could fill and shut on everybody else, which is exactly what other submissions
+  were rejected for.
+
+Instead, the compliant bids form a doubly linked list ordered by price, then commitment. A bid judged compliant
+that beats the head is linked at the head inside the same call. Any other compliant bid is linked by
+`place(bid, after)`. The caller supplies the neighbour, and the contract checks that `after` ranks ahead of the
+bid and that `after`'s current next ranks behind it. A wrong hint is refused, so the list can never be out of
+order. A knockout unlinks the bid in constant time and the next bid leads. `award()` waits until every compliant
+bid is placed and then reads only the head. Placement asks no model and is open to anyone, so nobody can stall
+the award by refusing to place. The cost is one extra cheap transaction for each compliant bid that is not the
+cheapest so far.
+
+## No cap on bids
+
+A cap on bids is an entry door that a stranger with spare addresses could fill. Tender has none: no call loops
+over the bids, unrevealed bonds are forfeited one bid at a time, and held bonds are reclaimed one bid at a time.
+The cost is that each bid needs its own `assess()` transaction, which anyone can send.
 
 ## The award does not wait forever
 
-The award waits for the reveal deadline, then for the last appeal window, and then for one of two things: every
-revealed bid assessed, or the review deadline. If a bid's round never reaches agreement, or nobody bothers to
+The award waits for the reveal deadline, then for the last appeal or challenge window, then for every compliant
+bid to be placed (anyone can do that, without the model), and then for one of two things: every revealed bid
+assessed, or the review deadline. If a bid's round never reaches agreement, or nobody bothers to
 assess it, that cannot hold the tender hostage. After `review_by`, an unassessed bid simply cannot win. The buyer
 sets that deadline in public when the tender opens.
 
 ## Over-budget reveals are recorded, not refused
 
 A price over the budget can never win. If it raised, the bid would stay unrevealed and the bidder would lose the
-bond for an honest reveal. Instead the reveal is stored as `over_budget`, the bond goes back, and the record shows
+bond for an honest reveal. Instead the reveal is stored as `over_budget`, the bond goes back at once (such a bid
+cannot be challenged, so nothing needs it held), and the record shows
 a refusal the code made. Revealing an over-budget price gives no option value: committing several valid prices
 and hiding the ones not needed still costs a bond for each one hidden.
 
