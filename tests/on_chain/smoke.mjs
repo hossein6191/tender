@@ -1,9 +1,15 @@
-/* Tender against GenLayer Studio (chain 61999), with throwaway accounts. Deploys its own copy.
+/* Tender against GenLayer Studio (chain 61999, Studio v0.123, GenVM v0.4), with throwaway accounts. Deploys its own copy.
  *
- *   npm ci                                                  # genlayer-js 1.1.8 and viem 2.56.8
+ *   npm ci                                                  # genlayer-js 2.0.0, pinned by package-lock.json
  *   node tests/on_chain/smoke.mjs                           # the whole run, from a fresh state
  *   RESUME=1 node tests/on_chain/smoke.mjs                  # continue a run that was cut off
  *   STATE=/some/dir/run.json RESUME=1 node tests/on_chain/smoke.mjs   # the same, with the state kept elsewhere
+ *
+ * Studio v0.123 charges fees: every deploy and write carries the distribution and fee value quoted by
+ * estimateTransactionFees(), and every transaction is checked for both its status (FINALIZED) and its execution
+ * result (FINISHED_WITH_RETURN, or FINISHED_WITH_ERROR for a raised refusal). What a transaction cost its sender is
+ * read from the transaction's own fee accounting (paid less refunded), so every balance is checked to the atto,
+ * fees included.
  *
  * Five generated accounts play the story, known only by their roles: BUYER is a primary school that wants its
  * twelve classrooms repainted; CHEAP, MIDDLE and DEAR are three painters; STRANGER bids over the budget, bids
@@ -48,9 +54,8 @@
  * A state file remembers the sha256 of the contract it deployed, and a RESUME against a state made from
  * another file stops before sending anything.
  */
-import { createClient, createAccount } from "genlayer-js";
+import { createClient, createAccount, generatePrivateKey } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
-import { generatePrivateKey } from "viem/accounts";
 import { getAddress } from "viem";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -69,7 +74,7 @@ const rpc = async (m, p) => {
     try {
       const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) });
       const j = await r.json();
-      if (j.error && (j.error.code === -32029 || r.status === 429)) { await sleep(((j.error.data?.retry_after_seconds) || 20) * 1000); continue; }
+      if (j.error && (j.error.code === -32029 || j.error.code === -32429 || r.status === 429)) { await sleep(((j.error.data?.retry_after_seconds) || 20) * 1000); continue; }
       if (j.error) { last = new Error(m + ": " + JSON.stringify(j.error).slice(0, 200)); await sleep(6000); continue; }
       return j.result;
     } catch (e) { last = e; await sleep(4000); }
@@ -85,7 +90,7 @@ const need = (v, what) => { if (!v) { console.log(`stopping: ${what} was not in 
 
 // ---------- state: keys, addresses and every step already made survive a cut-off run ----------
 const st = existsSync(STATE) && process.env.RESUME ? JSON.parse(readFileSync(STATE, "utf8")) : {};
-st.keys = st.keys || {}; st.steps = st.steps || {}; st.views = st.views || {}; st.order = st.order || []; st.ids = st.ids || {}; st.when = st.when || {};
+st.keys = st.keys || {}; st.steps = st.steps || {}; st.views = st.views || {}; st.order = st.order || []; st.ids = st.ids || {}; st.when = st.when || {}; st.fees = st.fees || {};
 const SOURCE_SHA = sha(readFileSync(FILE));
 if (st.source_sha256 && st.source_sha256 !== SOURCE_SHA) {
   console.log(`the state file ${STATE} belongs to a run of another contract file; start a fresh run without RESUME, or name another STATE`);
@@ -107,6 +112,7 @@ const ROLES = {
   stranger: "bids over the budget and after the deadline, assesses, places, awards, reclaims, tries to release the payment",
 };
 const acct = {}, client = {};
+for (const k of Object.keys(ROLES)) st.keys[k] = st.keys[k] || generatePrivateKey();
 for (const k of Object.keys(ROLES)) { acct[k] = createAccount(st.keys[k]); client[k] = createClient({ chain: studionet, account: acct[k] }); }
 const rd = createClient({ chain: studionet });
 st.accounts = Object.fromEntries(Object.keys(ROLES).map((k) => [k, getAddress(acct[k].address)]));
@@ -122,6 +128,30 @@ const fundOnce = async (k, whole) => {
   for (let i = 0; i < 20 && (await balance(acct[k].address)) === 0n; i++) await sleep(3000);
   st.funded[k] = String(await balance(acct[k].address)); save();
 };
+
+// ---------- fees: quoted before every transaction, and read back from every transaction ----------
+// estimateTransactionFeesForWrite fails on Studio ("fee below_minimum"); the generic quote works. The time-unit
+// allocations are raised to the policy's maximum so a round of six model calls fits; the unused part comes back.
+const quote = async (who) => {
+  for (let i = 0; ; i++) {
+    try {
+      const q = await client[who].estimateTransactionFees({ leaderTimeunitsAllocation: 600n, validatorTimeunitsAllocation: 600n });
+      if (!q?.policy?.enabled || !q?.distribution || !(q.feeValue > 0n)) throw new Error("no usable fee quote: " + JSON.stringify(q, (k, v) => (typeof v === "bigint" ? String(v) : v)).slice(0, 200));
+      return { distribution: q.distribution, feeValue: q.feeValue };
+    } catch (e) { if (i >= 8) throw e; await sleep(10000); }
+  }
+};
+// what a transaction cost its sender: paid less refunded, once the fee accounting is settled
+const feeOf = async (tx) => {
+  for (let i = 0; i < 30; i++) {
+    const t = await rpc("eth_getTransactionByHash", [tx]);
+    const fa = t?.data?.fee_accounting;
+    if (fa && fa.status === "settled" && fa.paid_fee_value !== undefined) return BigInt(fa.paid_fee_value) - BigInt(fa.total_refunded || 0);
+    await sleep(4000);
+  }
+  return null;
+};
+const addFee = (who, fee) => { st.fees[who] = String(BigInt(st.fees[who] || "0") + (fee ?? 0n)); };
 
 // ---------- transactions ----------
 const errText = (e) => String(e?.details || e?.shortMessage || e?.cause?.message || e?.message || e);
@@ -156,32 +186,40 @@ const wait = async (tx) => {
       let msg = "";
       try { msg = Buffer.from(one.result, "base64").toString("utf8").replace(/[^\x20-\x7e]/g, " ").trim(); } catch (e) {}
       const v = countVotes(t);
-      return { tx, msg, exec: one?.execution_result || "", votes: v, applied: v.agree * 2 > v.agree + v.disagree + v.idle, address: t.data?.contract_address || t.to_address || "" };
+      return { tx, msg, status: t.status, exec: t.txExecutionResultName || "", leader: one?.execution_result || "", votes: v, applied: t.result_name === "MAJORITY_AGREE" || v.agree * 2 > v.agree + v.disagree + v.idle, address: t.data?.contract_address || t.to_address || "" };
     }
     // a round no majority carried is final as it stands once it has been left alone for ten minutes
-    if (t?.status === "UNDETERMINED" && (stuck = stuck + 1) > 150) return { tx, msg: "UNDETERMINED", exec: "", votes: countVotes(t), applied: false, address: "" };
-    if (t?.status === "CANCELED") return { tx, msg: "CANCELED", exec: "", votes: { agree: 0, disagree: 0, idle: 0 }, applied: false, address: "" };
+    if (t?.status === "UNDETERMINED" && (stuck = stuck + 1) > 150) return { tx, msg: "UNDETERMINED", status: t.status, exec: "", leader: "", votes: countVotes(t), applied: false, address: "" };
+    if (t?.status === "CANCELED") return { tx, msg: "CANCELED", status: t.status, exec: "", leader: "", votes: { agree: 0, disagree: 0, idle: 0 }, applied: false, address: "" };
     if (i > 0 && i % 75 === 0) console.log(`      [${stamp()}] still ${t?.status || "unknown"} after ${Math.round(i * 4 / 60)} minutes: ${tx}`);
   }
-  return { tx, msg: "TIMEOUT", exec: "", votes: { agree: 0, disagree: 0, idle: 0 }, applied: false, address: "" };
+  return { tx, msg: "TIMEOUT", status: "TIMEOUT", exec: "", leader: "", votes: { agree: 0, disagree: 0, idle: 0 }, applied: false, address: "" };
 };
 const jsonOf = (msg) => { const b = String(msg).indexOf("{"); if (b === -1) return null; try { return JSON.parse(String(msg).slice(b)); } catch (e) { return null; } };
 const settle = async (a, before, want) => { for (let i = 0; i < 45; i++) { const b = await balance(a); if (b - before === want) return b; await sleep(4000); } return await balance(a); };
 
-// One step: a signed transaction, its tally, what it returned, and the balances it moved. opt.watch names
-// the roles whose balances are read before and after, opt.expect the change each should show (a table, or
-// a function of what the call returned), and opt.again how long to wait before sending a refused step again.
+// One step: a signed transaction with quoted fees, its status, execution result and tally, what it returned, what
+// it cost its sender, and the balances it moved. opt.watch names the roles whose balances are read before and
+// after, opt.expect the change each should show apart from fees (a table, or a function of what the call
+// returned): the sender's own fee for every try is subtracted from its line. opt.again is how long to wait
+// before sending a refused step again.
 const call = async (id, who, fn, args = [], opt = {}) => {
   if (!st.steps[id]) { st.steps[id] = { id, who, fn, args: args.map(String), value: String(opt.value || 0n), tries: [] }; st.order.push(id); }
   const rec = st.steps[id];
   if (!rec.done) {
     if (!rec.before) { rec.before = {}; for (const k of opt.watch || []) rec.before[k] = String(await balance(acct[k].address)); save(); }
     for (;;) {
-      if (!rec.pending) { rec.pending = await sendRaw(who, fn, () => client[who].writeContract({ address: need(st.contract, "the contract address"), functionName: fn, args, ...(opt.value ? { value: opt.value } : {}) })); save(); }
+      if (!rec.pending) {
+        const fees = await quote(who);
+        rec.pending = await sendRaw(who, fn, () => client[who].writeContract({ address: need(st.contract, "the contract address"), functionName: fn, args, fees, ...(opt.value ? { value: opt.value } : {}) }));
+        save();
+      }
       const r = await wait(rec.pending);
-      rec.tries.push({ tx: r.tx, votes: r.votes, exec: r.exec, applied: r.applied, msg: r.msg });
+      const fee = await feeOf(r.tx);
+      addFee(who, fee);
+      rec.tries.push({ tx: r.tx, status: r.status, exec: r.exec, leader: r.leader, votes: r.votes, applied: r.applied, fee: fee === null ? null : String(fee), msg: r.msg });
       rec.pending = null; save();
-      console.log(`      [${stamp()}] ${who.toUpperCase()} ${fn}(${args.map((x) => String(x).slice(0, 22)).join(", ")})${opt.value ? " +" + Number(opt.value) / 1e18 + " GEN" : ""}  ${r.tx}  ${tally(r.votes)}  ${r.exec}`);
+      console.log(`      [${stamp()}] ${who.toUpperCase()} ${fn}(${args.map((x) => String(x).slice(0, 22)).join(", ")})${opt.value ? " +" + Number(opt.value) / 1e18 + " GEN" : ""}  ${r.tx}  ${r.status} ${r.exec}  ${tally(r.votes)}  fee ${fee}`);
       if (r.msg === "TIMEOUT" || rec.tries.length >= 4) break;
       if (!r.applied) { console.log("      the validators did not carry that round (" + tally(r.votes) + "), so nothing was stored; sending it again"); continue; }
       const again = opt.again ? opt.again(r) : 0;
@@ -190,33 +228,38 @@ const call = async (id, who, fn, args = [], opt = {}) => {
     }
     const last = rec.tries[rec.tries.length - 1];
     const expect = typeof opt.expect === "function" ? opt.expect(jsonOf(last.msg)) : opt.expect;
+    const spent = rec.tries.reduce((n, t) => n + BigInt(t.fee || "0"), 0n);
+    rec.spent = String(spent);
     rec.after = {}; rec.delta = {};
     for (const k of opt.watch || []) {
       const before = BigInt(rec.before[k]);
-      const want = expect && expect[k] !== undefined ? BigInt(expect[k]) : null;
+      const want = expect && expect[k] !== undefined ? BigInt(expect[k]) - (k === who ? spent : 0n) : null;
       const now = want === null ? await balance(acct[k].address) : await settle(acct[k].address, before, want);
       rec.after[k] = String(now); rec.delta[k] = String(now - before);
     }
     rec.done = true; save();
   }
   const last = rec.tries[rec.tries.length - 1];
-  return { ...last, j: jsonOf(last.msg), tries: rec.tries, delta: rec.delta || {} };
+  return { ...last, j: jsonOf(last.msg), tries: rec.tries, delta: rec.delta || {}, spent: BigInt(rec.spent || "0"), who: rec.who };
 };
-const refused = (r, words) => r.exec === "ERROR" && r.msg.includes(words);
-const moved = (r, k, want) => r.delta[k] === String(want);
+const refused = (r, words) => r.status === "FINALIZED" && r.exec === "FINISHED_WITH_ERROR" && r.msg.includes(words);
+// the balance moved by the expected amount, less what the step's own transactions cost when the role sent them
+const moved = (r, k, want) => r.delta[k] === String(BigInt(want) - (k === r.who ? r.spent : 0n));
 const votes = (r) => r.tries.map((t) => tally(t.votes)).join(", then ");
 
 const deploy = async (id, who) => {
   if (!st.steps[id]) { st.steps[id] = { id, who, fn: "deploy contracts/tender.py", args: [], value: "0", tries: [] }; st.order.push(id); }
   const rec = st.steps[id];
   if (!rec.done) {
-    const code = readFileSync(FILE);
+    const code = readFileSync(FILE, "utf8");
     for (;;) {
-      if (!rec.pending) { rec.pending = await sendRaw(who, "deploy", () => client[who].deployContract({ code, args: [], leaderOnly: false })); save(); }
+      if (!rec.pending) { const fees = await quote(who); rec.pending = await sendRaw(who, "deploy", () => client[who].deployContract({ code, args: [], leaderOnly: false, fees })); save(); }
       const r = await wait(rec.pending);
-      rec.tries.push({ tx: r.tx, votes: r.votes, exec: r.exec, applied: r.applied, msg: r.msg.slice(0, 300) });
+      const fee = await feeOf(r.tx);
+      addFee(who, fee);
+      rec.tries.push({ tx: r.tx, status: r.status, exec: r.exec, leader: r.leader, votes: r.votes, applied: r.applied, fee: fee === null ? null : String(fee), msg: r.msg.slice(0, 300) });
       rec.address = r.address; rec.pending = null; save();
-      console.log(`      [${stamp()}] ${who.toUpperCase()} deploy  ${r.tx}  ${tally(r.votes)}  ${r.exec}  ${r.address}`);
+      console.log(`      [${stamp()}] ${who.toUpperCase()} deploy  ${r.tx}  ${r.status} ${r.exec}  ${tally(r.votes)}  fee ${fee}  ${r.address}`);
       if (r.applied || r.msg === "TIMEOUT" || rec.tries.length >= 3) break;
     }
     rec.done = true; save();
@@ -253,7 +296,7 @@ const untilPast = async (instant, what) => {
     await sleep((left + 20) * 1000);
   }
 };
-const notYet = (r) => { const m = /open for another (\d+) seconds/.exec(r.msg); return r.exec === "ERROR" && m ? (Number(m[1]) + 15) * 1000 : 0; };
+const notYet = (r) => { const m = /open for another (\d+) seconds/.exec(r.msg); return r.exec === "FINISHED_WITH_ERROR" && m ? (Number(m[1]) + 15) * 1000 : 0; };
 
 // ---------- the demonstration ----------
 const BUDGET = GEN * 6n / 5n, BOND = GEN / 20n, SHORT = GEN / 20n;
@@ -280,6 +323,8 @@ st.contract = st.contract || await deploy("deploy", "buyer");
 save();
 console.log(`      Tender at ${st.contract}`);
 {
+  const d = st.steps.deploy.tries.at(-1);
+  ok(`BUYER deploys contracts/tender.py on GenVM v0.4 with quoted fees: ${d.status}, ${d.exec}, fee ${d.fee} atto`, d.status === "FINALIZED" && d.exec === "FINISHED_WITH_RETURN" && /^0x[0-9a-fA-F]{40}$/.test(st.contract), tally(d.votes));
   const s = await seen("statsEmpty", "stats", []);
   ok("Tender is deployed and holds nothing yet", s.tenders === 0 && s.balance_owed === "0", JSON.stringify(s));
 }
@@ -437,7 +482,13 @@ console.log(`\n[${stamp()}] ---- 10: views, code and money`);
     if (s.fn === "appeal" && j.appeal === "upheld") want.buyer += BigInt(j.bond);
   }
   const net = (k) => BigInt(st.end[k]) - BigInt(st.start[k]);
-  ok("over the run every account ends exactly where the receipts say: MIDDLE 0.85 GEN up (the price and DEAR's challenge bond), CHEAP and DEAR 0.05 GEN down (their upheld appeal and challenge), BUYER 0.75 GEN down", Object.keys(want).every((k) => net(k) === want[k]) && want.middle === P_MIDDLE_PRICE + BOND && want.cheap === -BOND && want.dear === -BOND && want.buyer === BOND - P_MIDDLE_PRICE && want.stranger === 0n, Object.keys(want).map((k) => k.toUpperCase() + " " + Number(net(k)) / 1e18 + " (receipts " + Number(want[k]) / 1e18 + ")").join("  "));
+  const feeTotal = (k) => BigInt(st.fees[k] || "0");
+  ok("over the run every account ends exactly where the receipts say, less exactly the fees its own transactions paid: MIDDLE 0.85 GEN up (the price and DEAR's challenge bond), CHEAP and DEAR 0.05 GEN down (their upheld appeal and challenge), BUYER 0.75 GEN down", Object.keys(want).every((k) => net(k) === want[k] - feeTotal(k)) && want.middle === P_MIDDLE_PRICE + BOND && want.cheap === -BOND && want.dear === -BOND && want.buyer === BOND - P_MIDDLE_PRICE && want.stranger === 0n, Object.keys(want).map((k) => k.toUpperCase() + " " + Number(net(k)) / 1e18 + " (receipts " + Number(want[k]) / 1e18 + ", fees " + Number(feeTotal(k)) / 1e18 + ")").join("  "));
+  const all = st.order.flatMap((id) => st.steps[id].tries);
+  const badTx = all.filter((t) => t.status !== "FINALIZED" || !["FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR"].includes(t.exec));
+  ok(`every one of the ${all.length} transactions is FINALIZED with an execution result of FINISHED_WITH_RETURN or FINISHED_WITH_ERROR, and every one paid a fee`, badTx.length === 0 && all.every((t) => t.fee !== null && BigInt(t.fee) > 0n), badTx.map((t) => t.tx + " " + t.status + " " + t.exec).join(", "));
+  st.fee_summary = Object.fromEntries(Object.keys(ROLES).map((k) => [k, String(feeTotal(k))]));
+  save();
 }
 
 st.checks = { pass, fail }; save();
@@ -445,5 +496,6 @@ console.log(`\n${pass} passed, ${fail} failed`);
 console.log("Tender:", st.contract);
 console.log("transactions:", st.order.reduce((n, id) => n + st.steps[id].tries.length, 0), "in", st.order.length, "steps; sent a second time:", st.order.filter((id) => st.steps[id].tries.length > 1).join(", ") || "none");
 for (const id of st.order) { const s = st.steps[id], j = jsonOf(s.tries.at(-1)?.msg || ""); if (j?.mask || j?.appeal || j?.challenge) console.log(`${id.padEnd(18)} ${s.tries.map((t) => t.tx + " " + tally(t.votes)).join(" | ")}  ${j.bid} ${j.appeal || j.challenge || ""} ${j.mask}`); }
+console.log("fees paid, atto:", JSON.stringify(st.fee_summary));
 console.log("record:", RECORD);
 process.exit(fail ? 1 : 0);

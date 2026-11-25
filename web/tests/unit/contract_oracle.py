@@ -11,23 +11,16 @@ import pathlib
 import sys
 import types
 
-stub = types.ModuleType("genlayer")
-
-
-class _Any:
-    def __getattr__(self, n): return _Any()
-    def __call__(self, *a, **k): return _Any()
-    def __getitem__(self, n): return _Any()
+# The runtime stub, written to the GenVM v0.4 API: `import genlayer as gl`, `genlayer.types`, `genlayer.storage`.
+gl_mod = types.ModuleType("genlayer")
+types_mod = types.ModuleType("genlayer.types")
+storage_mod = types.ModuleType("genlayer.storage")
 
 
 class _UserError(Exception):
-    pass
-
-
-class _VM:
-    UserError = _UserError
-    Return = object
-    Result = object
+    def __init__(self, data=""):
+        super().__init__(data)
+        self.data = data
 
 
 class _Public:
@@ -39,34 +32,33 @@ class _Public:
     write = _Write()
 
 
-class _GL:
-    vm = _VM()
-    public = _Public()
-
-    class Contract:
-        pass
-
-    evm = _Any()
-
-    def __getattr__(self, n): return _Any()
-
-
 class _T:
     def __init__(self, *a, **k): pass
     def __class_getitem__(cls, item): return cls
 
 
-stub.gl = _GL()
-stub.allow_storage = lambda c: c
-stub.Address = str
-stub.DynArray = _T
-stub.TreeMap = _T
-stub.u256 = int
-stub.u32 = int
-stub.u64 = int
-stub.i64 = int
-stub.__all__ = ["gl", "allow_storage", "Address", "DynArray", "TreeMap", "u256", "u32", "u64", "i64"]
-sys.modules["genlayer"] = stub
+class _Contract:
+    pass
+
+
+types_mod.Address = str
+types_mod.u256 = int
+types_mod.u64 = int
+types_mod.u32 = int
+types_mod.__all__ = ["Address", "u256", "u64", "u32"]
+storage_mod.TreeMap = _T
+storage_mod.allow = lambda c: c
+gl_mod.types = types_mod
+gl_mod.storage = storage_mod
+gl_mod.public = _Public()
+gl_mod.contract = types.SimpleNamespace(Contract=_Contract)
+gl_mod.vm = types.SimpleNamespace(UserError=_UserError, Return=object, Result=object, run_nondet=None)
+gl_mod.nondet = types.SimpleNamespace(exec_prompt=None)
+gl_mod.chain = types.SimpleNamespace(Account=None)
+gl_mod.message = types.SimpleNamespace(sender_address="", value=0, contract_address="", raw={})
+sys.modules["genlayer"] = gl_mod
+sys.modules["genlayer.types"] = types_mod
+sys.modules["genlayer.storage"] = storage_mod
 
 SRC = pathlib.Path(__file__).resolve().parents[3] / "contracts" / "tender.py"
 spec = importlib.util.spec_from_file_location("tender", SRC)

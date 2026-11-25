@@ -178,8 +178,8 @@ MUTATIONS = [
     ("a tender is opened with no clock",
      '        if not problem and now < 0:\n', '        if False:\n'),
     ("a refusal keeps what was sent",
-     '        if value > 0:\n            _Payee(sender).emit_transfer(value=u256(value))',
-     '        if False:\n            _Payee(sender).emit_transfer(value=u256(value))'),
+     '        if value > 0:\n            _send(sender, value)',
+     '        if False:\n            _send(sender, value)'),
     ("a deposit of nothing is taken",
      '        if value <= 0:\n            return self._refuse(', '        if False:\n            return self._refuse('),
     # --- bid
@@ -200,8 +200,8 @@ MUTATIONS = [
     ("a bid from credit is taken without the credit",
      'elif value == 0 and held < bond:', 'elif False:'),
     ("a bid from credit does not take the credit",
-     '        if value == 0:\n            self.credit_rows[me] = u256(held - bond)\n',
-     '        if False:\n            self.credit_rows[me] = u256(held - bond)\n'),
+     '        if value == 0:\n            self.credit_rows[me] = held - bond\n',
+     '        if False:\n            self.credit_rows[me] = held - bond\n'),
     # --- reveal
     ("anyone may reveal a bid",
      'if _low(gl.message.sender_address) != _low(x.bidder):', 'if False:'),
@@ -233,9 +233,9 @@ MUTATIONS = [
     ("a bid within budget gets its bond back at the reveal",
      '        x.status = REVEALED\n', '        x.status = REVEALED\n        x.bond_to = TO_CREDIT\n'),
     ("an over-budget reveal keeps the bond held",
-     '            x.bond_to = TO_CREDIT\n            self.bonds_held = u256(int(self.bonds_held) - bond)\n'
-     '            self.credit_rows[me] = u256(self._credit(me) + bond)\n'
-     '            self.credits_held = u256(int(self.credits_held) + bond)',
+     '            x.bond_to = TO_CREDIT\n            self.bonds_held = int(self.bonds_held) - bond\n'
+     '            self.credit_rows[me] = self._credit(me) + bond\n'
+     '            self.credits_held = int(self.credits_held) + bond',
      '            x.bond_to = TO_CREDIT'),
     # --- forfeit
     ("a bond is forfeited while reveals are open",
@@ -245,8 +245,8 @@ MUTATIONS = [
      '        if str(x.status) != COMMITTED:\n            _fail(bid_id + " is " + str(x.status) + "; only a bid never',
      '        if False:\n            _fail(bid_id + " is " + str(x.status) + "; only a bid never'),
     ("a forfeited bond goes to the caller",
-     '        _Payee(t.buyer).emit_transfer(value=u256(bond))\n        return json.dumps({"ok": True, "bid": bid_id, "status": FORFEITED',
-     '        _Payee(gl.message.sender_address).emit_transfer(value=u256(bond))\n        return json.dumps({"ok": True, "bid": bid_id, "status": FORFEITED'),
+     '        _send(t.buyer, bond)\n        return json.dumps({"ok": True, "bid": bid_id, "status": FORFEITED',
+     '        _send(gl.message.sender_address, bond)\n        return json.dumps({"ok": True, "bid": bid_id, "status": FORFEITED'),
     # --- assess
     ("a bid that is not revealed within budget is assessed",
      '        if str(x.status) != REVEALED:\n', '        if False:\n'),
@@ -258,12 +258,12 @@ MUTATIONS = [
      '        if _meets_all(mask, len(reqs)):\n            x.compliant = True\n',
      '        if MISSES not in mask:\n            x.compliant = True\n'),
     ("a bid's window ends when it opens",
-     '        x.appeal_until = u64(now + APPEAL_SECONDS)\n', '        x.appeal_until = u64(now)\n'),
+     '        x.appeal_until = now + APPEAL_SECONDS\n', '        x.appeal_until = now\n'),
     ("the award does not wait for a bid's window",
      'if now + APPEAL_SECONDS > int(t.appeal_until):', 'if False:'),
     ("a compliant assessment opens no window",
-     '        self.assessed_count = u32(int(self.assessed_count) + 1)\n        self._open_window(t, x, now)\n',
-     '        self.assessed_count = u32(int(self.assessed_count) + 1)\n        if not _meets_all(mask, len(reqs)):\n'
+     '        self.assessed_count = int(self.assessed_count) + 1\n        self._open_window(t, x, now)\n',
+     '        self.assessed_count = int(self.assessed_count) + 1\n        if not _meets_all(mask, len(reqs)):\n'
      '            self._open_window(t, x, now)\n'),
     # --- ordering
     ("the dearer bid ranks ahead",
@@ -300,7 +300,7 @@ MUTATIONS = [
     ("linking after a bid leaves its next pointer alone",
      '            a.next = bid_id\n', ''),
     ("the placed count is not kept",
-     '        x.placed = True\n        t.placed = u32(int(t.placed) + 1)\n', '        x.placed = True\n'),
+     '        x.placed = True\n        t.placed = int(t.placed) + 1\n', '        x.placed = True\n'),
     ("unlinking the head leaves it the head",
      '        else:\n            t.head = nxt\n', '        else:\n            pass\n'),
     ("unlinking leaves the previous bid pointing at it",
@@ -352,15 +352,15 @@ MUTATIONS = [
     ("a knocked-out bid stays in the list",
      '            if bool(x.placed):\n                self._unlink(t, x)\n', ''),
     ("a knockout does not lower the compliant count",
-     '            t.compliant = u32(int(t.compliant) - 1)\n', ''),
+     '            t.compliant = int(t.compliant) - 1\n', ''),
     ("a knockout does not pay the challenger the bid's bond",
-     '            self.credit_rows[me] = u256(held + taken)\n', '            self.credit_rows[me] = u256(held)\n'),
+     '            self.credit_rows[me] = held + taken\n', '            self.credit_rows[me] = held\n'),
     ("a knockout leaves the bid's bond reclaimable",
      '            x.bond_to = TO_CHALLENGER\n', ''),
     ("an upheld challenge's bond stays with the challenger",
-     '        self.credit_rows[me] = u256(held - bond)\n        self.credit_rows[bidder]', '        self.credit_rows[bidder]'),
+     '        self.credit_rows[me] = held - bond\n        self.credit_rows[bidder]', '        self.credit_rows[bidder]'),
     ("an upheld challenge's bond never reaches the challenged bidder",
-     '        self.credit_rows[bidder] = u256(self._credit(bidder) + bond)\n', ''),
+     '        self.credit_rows[bidder] = self._credit(bidder) + bond\n', ''),
     ("a knocked-out bid may still appeal",
      '        if str(x.challenge):\n            _fail(bid_id + " was knocked out', '        if False:\n            _fail(bid_id + " was knocked out'),
     # --- reclaim
@@ -371,8 +371,8 @@ MUTATIONS = [
     ("a forfeited or over-budget bid reclaims a bond",
      'if str(x.status) != REVEALED or str(x.bond_to):', 'if str(x.bond_to) == TO_CREDIT:'),
     ("reclaim does not mark the bond returned",
-     '        x.bond_to = TO_CREDIT\n        self.bonds_held = u256(int(self.bonds_held) - bond)\n        self.credit_rows[me] = u256(self._credit(me) + bond)\n        self.credits_held = u256(int(self.credits_held) + bond)\n        return json.dumps({"ok": True, "bid": bid_id, "bond": str(bond)',
-     '        self.bonds_held = u256(int(self.bonds_held) - bond)\n        self.credit_rows[me] = u256(self._credit(me) + bond)\n        self.credits_held = u256(int(self.credits_held) + bond)\n        return json.dumps({"ok": True, "bid": bid_id, "bond": str(bond)'),
+     '        x.bond_to = TO_CREDIT\n        self.bonds_held = int(self.bonds_held) - bond\n        self.credit_rows[me] = self._credit(me) + bond\n        self.credits_held = int(self.credits_held) + bond\n        return json.dumps({"ok": True, "bid": bid_id, "bond": str(bond)',
+     '        self.bonds_held = int(self.bonds_held) - bond\n        self.credit_rows[me] = self._credit(me) + bond\n        self.credits_held = int(self.credits_held) + bond\n        return json.dumps({"ok": True, "bid": bid_id, "bond": str(bond)'),
     # --- appeal
     ("anyone may appeal a bid",
      '        if me != _low(x.bidder):\n', '        if False:\n'),
@@ -403,7 +403,7 @@ MUTATIONS = [
      '            self._open_window(t, x, now)\n            self._try_head(t, bid_id, x)\n            return',
      '            self._try_head(t, bid_id, x)\n            return'),
     ("an upheld appeal's bond never reaches the buyer",
-     '        _Payee(t.buyer).emit_transfer(value=u256(bond))\n        return json.dumps({"ok": True, "bid": bid_id, "appeal": UPHELD',
+     '        _send(t.buyer, bond)\n        return json.dumps({"ok": True, "bid": bid_id, "appeal": UPHELD',
      '        return json.dumps({"ok": True, "bid": bid_id, "appeal": UPHELD'),
     # --- award
     ("a decided tender is awarded again",
@@ -450,7 +450,7 @@ MUTATIONS = [
     ("the price is claimed before the claim opens",
      '        if now < opens:\n', '        if False:\n'),
     ("the price goes to the buyer instead of the winner",
-     '        _Payee(w.bidder).emit_transfer(value=u256(price))\n', '        _Payee(t.buyer).emit_transfer(value=u256(price))\n'),
+     '        _send(w.bidder, price)\n', '        _send(t.buyer, price)\n'),
     # --- credit
     ("more than the credit is withdrawn",
      'if amount < 1 or amount > held:', 'if amount < 1:'),

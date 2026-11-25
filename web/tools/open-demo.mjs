@@ -10,7 +10,9 @@
 // {"privateKey": "0x..."} (or "key", "private_key", "DEMO_KEY", or the bare key as a JSON string). It is never
 // printed; only the three public addresses are. If a demo tender from this key is still taking bids with more
 // than five minutes left, no new one is opened and only a missing rival bid is sent. Each transaction is
-// followed to a final status. Needs Node 22.18 or later (it reads lib/*.ts directly).
+// followed to a final status and a finished execution result. Studio v0.123 charges fees: every transaction
+// carries the fee quoted by estimateTransactionFees() (lib/fees.ts), and what it cost is printed from its own fee
+// accounting. Needs Node 22.18 or later (it reads lib/*.ts directly).
 
 import { readFileSync } from "node:fs";
 import { createAccount, createClient } from "genlayer-js";
@@ -18,6 +20,7 @@ import { studionet } from "genlayer-js/chains";
 import { getAddress } from "viem";
 
 import { cleanKey, deriveAll, keyProblem } from "../lib/demo-key.ts";
+import { feePaid, quoteFees } from "../lib/fees.ts";
 import { DEMO_BOND, DEMO_BUDGET, DEMO_OPEN_ARGS, DEMO_REQUIREMENTS, DEMO_SCOPE, DEMO_TITLE, RIVALS, rivalCommitment } from "../lib/demo-script.ts";
 import { proposalProblem, requirementsOf, scopeProblem, titleProblem } from "../lib/rules.ts";
 
@@ -101,10 +104,15 @@ async function follow(hash) {
         json = null;
       }
       const votes = Object.values(tx.consensus_data?.votes ?? {});
-      return { status, json, agree: votes.filter((v) => v === "agree").length, of: votes.length, text };
+      let fee = feePaid(tx);
+      for (let k = 0; k < 10 && fee === null && status === "FINALIZED"; k++) {
+        await sleep(3000);
+        fee = feePaid(await rpc("eth_getTransactionByHash", [hash]));
+      }
+      return { status, exec: String(tx.txExecutionResultName ?? ""), json, agree: votes.filter((v) => v === "agree").length, of: votes.length, text, fee };
     }
   }
-  return { status: "TIMEOUT", json: null, agree: 0, of: 0, text: "" };
+  return { status: "TIMEOUT", exec: "", json: null, agree: 0, of: 0, text: "", fee: null };
 }
 
 const reader = createClient({ chain: studio });
@@ -124,10 +132,11 @@ async function send(k, functionName, args, value, label) {
   const client = createClient({ chain: studio, account: createAccount(k) });
   for (let tries = 1; ; tries++) {
     try {
-      const hash = await client.writeContract({ address: REGISTER, functionName, args, value });
+      const fees = await quoteFees(client);
+      const hash = await client.writeContract({ address: REGISTER, functionName, args, value, fees });
       const done = await follow(hash);
-      const okay = done.json?.ok === true;
-      console.log(`${okay ? "OK  " : "FAIL"}  ${label}: ${okay ? "" : done.status + " " + done.text.slice(0, 160)}  ${done.agree}/${done.of} agree  ${EXPLORER}/tx/${hash}`);
+      const okay = done.status === "FINALIZED" && done.exec === "FINISHED_WITH_RETURN" && done.json?.ok === true;
+      console.log(`${okay ? "OK  " : "FAIL"}  ${label}: ${done.status} ${done.exec}${okay ? "" : " " + done.text.slice(0, 160)}  ${done.agree}/${done.of} agree  fee ${done.fee ?? "?"} atto  ${EXPLORER}/tx/${hash}`);
       if (!okay) process.exit(1);
       return done.json;
     } catch (e) {

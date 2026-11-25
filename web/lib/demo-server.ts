@@ -12,6 +12,7 @@ import { getAddress, type Address } from "viem";
 
 import { balanceOf, contractAddress, isMock, readBids, readTender, readTendersOfWindow, returnedId, studio } from "./chain";
 import { cleanKey, deriveAll, keyProblem } from "./demo-key";
+import { quoteFees } from "./fees";
 import { DEMO_LIMITS, createLimiter } from "./demo-limit";
 import { DEMO_BUDGET, DEMO_OPEN_ARGS, RIVALS, demoTurn, rivalCommitment, rivalSalt, type DemoAddrs, type RivalKey } from "./demo-script";
 import { FINAL_STATUSES, decodeTx, rpc, sleep, statusName, type RawTx } from "./rpc";
@@ -121,7 +122,9 @@ function serial<T>(job: () => Promise<T>): Promise<T> {
 async function sign(key: `0x${string}`, address: string, functionName: string, args: (string | number)[], value: bigint): Promise<string> {
   const hash = await serial(async () => {
     const client = createClient({ chain: studio, account: createAccount(key) });
-    return client.writeContract({ address: contractAddress() as Address, functionName, args, value });
+    // Studio v0.123: every write carries the quoted fee; the unused part comes back to the demo account
+    const fees = await quoteFees(client);
+    return client.writeContract({ address: contractAddress() as Address, functionName, args, value, fees } as never);
   });
   if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("no hash");
   inflight.set(address, { hash, at: Date.now() });

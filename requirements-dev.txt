@@ -1,5 +1,5 @@
 # The offline suite: `pip install -r requirements-dev.txt` then `pytest tests/ -q`: no network, no Studio.
 pytest==9.1.1
-# The linter the contract is checked with. The package is genvm-linter; the command it installs is
-# genvm-lint (`genvm-lint check contracts/tender.py`).
-genvm-linter==0.11.0
+# The linter the contract is checked with. The package is genvm-linter (0.11.1 or later knows the v0.4 runner);
+# the command it installs is genvm-lint (`genvm-lint check contracts/tender.py`).
+genvm-linter==0.11.1rc2

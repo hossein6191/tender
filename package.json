@@ -8,7 +8,7 @@
     "smoke": "node tests/on_chain/smoke.mjs"
   },
   "dependencies": {
-    "genlayer-js": "1.1.8",
-    "viem": "2.56.8"
+    "genlayer-js": "2.0.0",
+    "viem": "2.58.6"
   }
 }

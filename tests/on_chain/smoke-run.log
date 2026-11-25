@@ -1,116 +1,119 @@
-[keeper] starting 2026-11-18T20:19:31.747Z
-[20:19:37] BUYER     0xEdC76750FB4f334C9f3ea5417054B8C1FF7Ea615  a primary school; opens the classroom tender, is refused a bid on it, releases the payment
-           CHEAP     0x2E6F4C767135A49Ed17DECB9F1532C459192850B  the cheapest painter, whose proposal never commits to low-VOC paint; appeals once
-           MIDDLE    0x90D2e59E0cF811712276B8dbb3627F0E9ea2AE80  a painter whose proposal meets every requirement; bids from credit
-           DEAR      0xBF49Ad12133Ed5ae92626Fa7Fe4081e030b22187  the dearest painter, whose proposal also meets every requirement; challenges the leader once
-           STRANGER  0x99a536d38471867dD94dA3E307440E76Ac6BDF12  bids over the budget and after the deadline, assesses, places, awards, reclaims, tries to release the payment
+[19:54:53] BUYER     0x84141700C796ac2c8636dAfa5793D42757393e43  a primary school; opens the classroom tender, is refused a bid on it, releases the payment
+           CHEAP     0x83CA4F98176b2d509e76c76a641bdf1e7C6e8b5c  the cheapest painter, whose proposal never commits to low-VOC paint; appeals once
+           MIDDLE    0x261A54027d9d914Bb7cD4B29b744d3a9ea00Dff5  a painter whose proposal meets every requirement; bids from credit
+           DEAR      0x90dA0cbb138a76749488FC060EC75F0B519f21d4  the dearest painter, whose proposal also meets every requirement; challenges the leader once
+           STRANGER  0x294cAfa9320bee1F3742773142C5A51BA00FDD69  bids over the budget and after the deadline, assesses, places, awards, reclaims, tries to release the payment
 
-[20:19:37] ---- 1: deploy
-      [20:20:20] BUYER deploy  0x83526039a111783f232a94d15be7e73978c4cd47f18aedb91dbbd38a75a01e0a  3 agree, 0 disagree, 2 idle  SUCCESS  0xcb8446a72832Bb88DFD531D531f938269E0E06dB
-      Tender at 0xcb8446a72832Bb88DFD531D531f938269E0E06dB
-PASS  Tender is deployed and holds nothing yet  - {"tenders":0,"bids":0,"awarded":0,"no_award":0,"paid":0,"waived":0,"assessed":0,"appeals":0,"overturned":0,"challenges":0,"knocked_out":0,"refunds":0,"credits_held":"0","budgets_held":"0","bonds_held":"0","paid_total":"0","returned_total":"0","to_buyers_total":"0","balance_owed":"0","now":1795033221}
+[19:54:53] ---- 1: deploy
+      [19:55:41] BUYER deploy  0x7e79d9d421a14310668053223a57898b3ab78717414bc37692862b8bb51d7908  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 79315000003529  0x746592c85bb3005484d49e9A6A0fbBc8363a6C13
+      Tender at 0x746592c85bb3005484d49e9A6A0fbBc8363a6C13
+PASS  BUYER deploys contracts/tender.py on GenVM v0.4 with quoted fees: FINALIZED, FINISHED_WITH_RETURN, fee 79315000003529 atto  - 4 agree, 0 disagree, 1 idle
+PASS  Tender is deployed and holds nothing yet  - {"tenders":0,"bids":0,"awarded":0,"no_award":0,"paid":0,"waived":0,"assessed":0,"appeals":0,"overturned":0,"challenges":0,"knocked_out":0,"refunds":0,"credits_held":"0","budgets_held":"0","bonds_held":"0","paid_total":"0","returned_total":"0","to_buyers_total":"0","balance_owed":"0","now":1795636541}
 
-[20:20:22] ---- 2: a refused tender, then the classroom tender
-      [20:21:04] BUYER open_tender(Repaint Elm Street Pri, Repaint the walls and , Paints all 12 classroo, 50000000000000000, 1795034724, 1795035924, 1795037724, 1795041324) +0.05 GEN  0x816f09865f25a6c5d0031543741ef636889ce69f8460cac9db272f436b030a68  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  BUYER opens with 0.05 GEN, under the 0.1 GEN floor: refused and every atto returned  - 5 agree, 0 disagree, 0 idle
-      [20:21:45] BUYER open_tender(Repaint Elm Street Pri, Repaint the walls and , Paints all 12 classroo, 50000000000000000, 1795034724, 1795035924, 1795037724, 1795041324) +1.2 GEN  0xfb4d377c1adcfda055754335b11db425daf1e464627e69dc8e68e2c8dfd46472  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  BUYER opens T1 with a 1.2 GEN budget held in escrow and three requirements; no model runs  - 5 agree, 0 disagree, 0 idle
+[19:55:42] ---- 2: a refused tender, then the classroom tender
+      [19:56:27] BUYER open_tender(Repaint Elm Street Pri, Repaint the walls and , Paints all 12 classroo, 50000000000000000, 1795638045, 1795639245, 1795641045, 1795644645) +0.05 GEN  0xc0213badb526da1f6a91458d91762c759b50d4858caae7fad98bf83016f45701  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126304250002823
+PASS  BUYER opens with 0.05 GEN, under the 0.1 GEN floor: refused and every atto returned  - 3 agree, 0 disagree, 2 idle
+      [19:57:08] BUYER open_tender(Repaint Elm Street Pri, Repaint the walls and , Paints all 12 classroo, 50000000000000000, 1795638045, 1795639245, 1795641045, 1795644645) +1.2 GEN  0x44d30c2d0871f8ec355fc013e6d2c798a90d0ba75e6209c73b7c0a49dc1ab5ad  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78636250002823
+PASS  BUYER opens T1 with a 1.2 GEN budget held in escrow and three requirements; no model runs  - 3 agree, 0 disagree, 2 idle
 
-[20:21:45] ---- 3: four sealed bids, and the buyer refused
-      [20:22:23] CHEAP bid(T1, db57b33080e158e0a8ad5c) +0.05 GEN  0x3a7482346f6a30043517a9352f7313fc363ab6a61a2b29c4e44e3f5cb45a7319  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  CHEAP commits a sealed bid, B1, staking the 0.05 GEN bond with the call  - 3 agree, 0 disagree, 2 idle
-      [20:23:07] MIDDLE deposit() +0.05 GEN  0xae3f3c618fff5ed1ec9f418e76d9baf5536ce57a23c5379f6b80d0b3d7ec9006  4 agree, 0 disagree, 1 idle  SUCCESS
-PASS  MIDDLE deposits 0.05 GEN of credit  - 4 agree, 0 disagree, 1 idle
-      [20:23:45] MIDDLE bid(T1, 8e2d71c9ef68ee6e6f7b15)  0xc1ebc5e57df4c7e1c7c74157f34b797cfe4478e35919062d098eb0b507f69af3  3 agree, 0 disagree, 2 idle  SUCCESS
+[19:57:08] ---- 3: four sealed bids, and the buyer refused
+      [19:57:56] CHEAP bid(T1, 69ccaf4caa0017468bd008) +0.05 GEN  0xdbf1d31770e8016a6b6103ce8c3e9978071652e43c8165e6669ac9c3155d5d7f  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78638000003529
+PASS  CHEAP commits a sealed bid, B1, staking the 0.05 GEN bond with the call  - 4 agree, 0 disagree, 1 idle
+      [19:58:40] MIDDLE deposit() +0.05 GEN  0xf9626b1f8d4c5b3199b469f3afc6cb1e316652e84e941001c300a9452a91d756  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78629750002823
+PASS  MIDDLE deposits 0.05 GEN of credit  - 3 agree, 0 disagree, 2 idle
+      [19:59:25] MIDDLE bid(T1, c18b0250706bdb999b44b6)  0xa5605af9d0984b8c1e325564baba96c00b29c48547101da1f9998ce88e570fb0  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78640000002823
 PASS  MIDDLE commits B2 with the bond taken from credit  - 3 agree, 0 disagree, 2 idle
-      [20:24:25] DEAR bid(T1, 38c1b2b310afa413519302) +0.05 GEN  0x06a3546c2f70562633bb0211428481ae095ff5b649db108becf252b0e4da2ad4  4 agree, 0 disagree, 1 idle  SUCCESS
+      [20:00:08] DEAR bid(T1, 4d50bc5bc355a6edb7b637) +0.05 GEN  0xbaafbaf59316ec0579503dcb9e4364ccffbd4e57bef8dcaaf2695aaf44936d45  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78639750003529
 PASS  DEAR commits B3  - 4 agree, 0 disagree, 1 idle
-      [20:25:04] STRANGER bid(T1, 17ef9586b14b8fd6814bb4) +0.05 GEN  0x4187217ae7512412ebaafc1d722cc5bb446bf2172e7c68d995281203ad9679d9  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  STRANGER commits B4; its price is sealed, so nobody can tell yet that it is over the budget  - 5 agree, 0 disagree, 0 idle
-      [20:25:44] CHEAP deposit() +0.05 GEN  0x8700dbdcc79ba2ee3ad8688f78c6bf9b409db06283cd34d589733d9f0881e62b  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  CHEAP deposits 0.05 GEN of credit, ready for an appeal or a challenge bond  - 3 agree, 0 disagree, 2 idle
-      [20:26:22] DEAR deposit() +0.05 GEN  0xc4032000d56e7e98742c6d6ebf0f80e001a3f3c1bf582611cb4d4ea1a8a6fea7  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  DEAR deposits 0.05 GEN of credit, ready for an appeal or a challenge bond  - 5 agree, 0 disagree, 0 idle
-      [20:27:01] BUYER bid(T1, e4e84c1d1a54697244b2b8) +0.05 GEN  0x2e5df41b5ed748d8f3c078ebbfdf038ca8e4f49bed10df6a2dc382535f35a957  3 agree, 0 disagree, 2 idle  SUCCESS
+      [20:01:03] STRANGER bid(T1, 3f4c25c495e5ea2509aee4) +0.05 GEN  0x7f64307052ac69c26d775f75707b58b0cbdf994d7bca01efd23a5763ab55b424  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78639750003529
+PASS  STRANGER commits B4; its price is sealed, so nobody can tell yet that it is over the budget  - 4 agree, 0 disagree, 1 idle
+      [20:01:47] CHEAP deposit() +0.05 GEN  0x47a5d1d438e497820c1a084242b41de2c1deba51d9f6c4b3cc9baf18b7880716  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78629750003529
+PASS  CHEAP deposits 0.05 GEN of credit, ready for an appeal or a challenge bond  - 4 agree, 0 disagree, 1 idle
+      [20:02:28] DEAR deposit() +0.05 GEN  0xe2e131fcbfb8baf56d0ac2f2637140adb6a98af055b1f18950f399ecd55fe7f9  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78630250002823
+PASS  DEAR deposits 0.05 GEN of credit, ready for an appeal or a challenge bond  - 3 agree, 0 disagree, 2 idle
+      [20:03:12] BUYER bid(T1, 5f69392296f339eec87572) +0.05 GEN  0x842a0eebd678c19237e65d962267397d9e86715922152004d9fdf78b17baf5f6  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126304250002823
 PASS  BUYER tries to bid on its own tender: refused, recorded, and the bond returned  - 3 agree, 0 disagree, 2 idle
 
-[20:27:01] ---- 4: bidding closes
-      [20:46:28] STRANGER bid(T1, a03cc29b82c5e3338b37aa) +0.05 GEN  0x539ea0c8ecca1bf9ac9dc95943175f1211c964bb65730543176b18b800c394c6  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  STRANGER bids after the bidding deadline: refused and the bond returned  - 3 agree, 0 disagree, 2 idle
+[20:03:12] ---- 4: bidding closes
+      [20:03:13] waiting 1072 s, by the chain clock, for bidding to close
+      [20:21:48] STRANGER bid(T1, 05b942910b033207406503) +0.05 GEN  0x04c7de8b0ab411962a2f64c7c0a81261500a3bcf8d9f43f9a1c3409c82dcec86  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 126304250003529
+PASS  STRANGER bids after the bidding deadline: refused and the bond returned  - 4 agree, 0 disagree, 1 idle
 
-[20:46:33] ---- 5: reveals
-      [20:47:12] CHEAP reveal(B1, 600000000000000000, We will paint all 12 c, 723f6cb40933dbb5a694ca)  0x77e832881abca2b9ce3d0cf0236bcbd281d7a70920175b3aa99a70eae0e4427a  3 agree, 0 disagree, 2 idle  ERROR
+[20:21:48] ---- 5: reveals
+      [20:22:28] CHEAP reveal(B1, 600000000000000000, We will paint all 12 c, 5c03e92c281b66fcf29484)  0x48eac63d68a6ecc5d7331c419981f0a503fcca6b691a1fdb5099ae656659c0d4  FINALIZED FINISHED_WITH_ERROR  3 agree, 0 disagree, 2 idle  fee 78628000002823
 PASS  CHEAP reveals with the wrong salt: refused, nothing stored  - [EXPECTED] this price, proposal and salt do not match the commitment of B1
-      [20:47:50] CHEAP reveal(B1, 600000000000000000, We will paint all 12 c, 376028d58b34c79a0f923c)  0xc1c2280378eb359b9c02f48194f7d35d7ab35923a6c79a0e3569d666de0cec6c  3 agree, 0 disagree, 2 idle  SUCCESS
+      [20:23:15] CHEAP reveal(B1, 600000000000000000, We will paint all 12 c, 48f274ee343f7f403a2a66)  0x4cb8b1f63f9c45a207d9a9e96c9edf6721299e906ef92017c8bcc0c59dfe027c  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78630750002823
 PASS  CHEAP reveals B1 at 0.6 GEN; its bond stays held until the award  - 3 agree, 0 disagree, 2 idle
-      [20:48:29] MIDDLE reveal(B2, 800000000000000000, We will paint all 12 c, 723f6cb40933dbb5a694ca)  0x86a62afe9f266a720c6df08e315d3b93c868525055273c5dce1de732fed8811b  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  MIDDLE reveals B2 at 0.8 GEN; its bond stays held until the award  - 5 agree, 0 disagree, 0 idle
-      [20:49:08] DEAR reveal(B3, 1000000000000000000, Our crew will repaint , 3a0223a4000492400c852a)  0xf02c649db5669248030703bd07d75a4a7355b894059e5b66d123191acbff945f  3 agree, 0 disagree, 2 idle  SUCCESS
+      [20:23:56] MIDDLE reveal(B2, 800000000000000000, We will paint all 12 c, 5c03e92c281b66fcf29484)  0x37d7ea704ceeacfe7e047b97c7f364e1c739876545ccabf14e16601b23b77a2f  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78630500003529
+PASS  MIDDLE reveals B2 at 0.8 GEN; its bond stays held until the award  - 4 agree, 0 disagree, 1 idle
+      [20:24:35] DEAR reveal(B3, 1000000000000000000, Our crew will repaint , 2e9e21b3d4b64280ac30fa)  0xcdf09afa648744eb5a1f306ed4b5fdb0ff8187423ce6182e30d75c50df036582  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78630500002823
 PASS  DEAR reveals B3 at 1 GEN; its bond stays held until the award  - 3 agree, 0 disagree, 2 idle
-      [20:49:46] STRANGER reveal(B4, 1500000000000000000, We will paint all 12 c, 405a4da3edaf1520adf2e8)  0xac2fab583bdedc00fe93101fd8edee7df981338d180f9c1f749b1ab954146dd8  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  STRANGER reveals B4 at 1.5 GEN: recorded as over_budget, so it cannot win  - 3 agree, 0 disagree, 2 idle
+      [20:25:17] STRANGER reveal(B4, 1500000000000000000, We will paint all 12 c, c3694fefcc1698b5490cb3)  0xf04e811ed25e49e70f869c903bc387316f835c0eb4b17f087bb2512ae5493360  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78633500003529
+PASS  STRANGER reveals B4 at 1.5 GEN: recorded as over_budget, so it cannot win  - 4 agree, 0 disagree, 1 idle
 
-[20:49:46] ---- 6: the award before the assessments
-      [21:06:26] STRANGER award(T1)  0x72251cb80ffc7d09507fe358e7a05f0f9f6efecdd2d837447336b4dc68cb5508  5 agree, 0 disagree, 0 idle  ERROR
-PASS  STRANGER tries to award T1 before any bid is assessed: refused  - [EXPECTED] 3 of the 3 bids revealed on T1 are not assessed yet; anyone may assess() them, or the award waits until review_by, 1795037724
+[20:25:17] ---- 6: the award before the assessments
+      [20:25:18] waiting 948 s, by the chain clock, for reveals to close
+      [20:41:49] STRANGER award(T1)  0x09172161e909fd2508ecd34592489f5197e82f709a337165928b4c5646772fb6  FINALIZED FINISHED_WITH_ERROR  3 agree, 0 disagree, 2 idle  fee 78628000002823
+PASS  STRANGER tries to award T1 before any bid is assessed: refused  - [EXPECTED] 3 of the 3 bids revealed on T1 are not assessed yet; anyone may assess() them, or the award waits until review_by, 1795641045
 
-[21:06:26] ---- 7: three assessments, one bid per transaction, both orders; one appeal, one challenge
-      [21:07:37] STRANGER assess(B1)  0x76059784598b5c3b3e8201be6bdf8240c29d1a5e233cb6228579817061433058  3 agree, 1 disagree, 1 idle  SUCCESS
-PASS  CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint  - MEETS,MISSES,MEETS (3 agree, 1 disagree, 1 idle)
-      [21:08:34] CHEAP appeal(B1, Standard acrylic emuls)  0x657695fe9046973d5ef6917e764d1f0beccc0d34219f840be807ef61dc81193a  3 agree, 0 disagree, 2 idle  SUCCESS
+[20:41:49] ---- 7: three assessments, one bid per transaction, both orders; one appeal, one challenge
+      [20:42:48] STRANGER assess(B1)  0x04cea39c00589837daafefbd59e85d174747c5b09ff186711e52e0070715c8f3  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 79061500002823
+PASS  CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint  - MEETS,MISSES,MEETS (3 agree, 0 disagree, 2 idle)
+      [20:43:36] CHEAP appeal(B1, Standard acrylic emuls)  0xf4c496445f0b9f34a641785cf3d79a5c371f7f59b2b94564be0c13207a89f797  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126740500002823
 PASS  CHEAP's appeal is upheld: the reason is not part of the proposal, and the 0.05 GEN appeal bond reaches BUYER from CHEAP's credit  - upheld MEETS,MISSES,MEETS (3 agree, 0 disagree, 2 idle)
-      [21:09:22] STRANGER assess(B2)  0xd1d2d663ae53f92e8a610caf2edecac3d680a8d4e75de1710afdd167482edfeb  3 agree, 0 disagree, 2 idle  SUCCESS
+      [20:44:32] STRANGER assess(B2)  0xc05642430d805aa90c06252743bf22bb849072bef59cbd5f1c1d7f253671cc20  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 79058500002823
 PASS  MIDDLE reads MEETS,MEETS,MEETS and goes to the head of the ordered list  - MEETS,MEETS,MEETS (3 agree, 0 disagree, 2 idle)
-      [21:10:14] DEAR challenge(B2, Water-based paint is n)  0x2e4370055bf645390c6b0abd818c465b9e3ae7e2561a40a469bd8c8e5da15153  3 agree, 0 disagree, 2 idle  SUCCESS
+      [20:45:39] DEAR challenge(B2, Water-based paint is n)  0x346c8bc42894d6e0596eb10a4a003d67abebd681a13bd282e453f2401595b214  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 157740500004588
 PASS  DEAR's challenge of MIDDLE is upheld: no requirement reads MISSES, MIDDLE keeps the lead, and DEAR's 0.05 GEN bond goes to MIDDLE's credit  - upheld MEETS,MEETS,MEETS (3 agree, 0 disagree, 2 idle)
-PASS  MIDDLE's credit now holds DEAR's challenge bond  - {"who":"0x90d2e59e0cf811712276b8dbb3627f0e9ea2ae80","credit":"50000000000000000"}
-      [21:11:01] STRANGER assess(B3)  0xd39fe5d338cfa1baf4c0449f3e7612ee52865991f093fa82e33da400599123a0  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  MIDDLE's credit now holds DEAR's challenge bond  - {"who":"0x261a54027d9d914bb7cd4b29b744d3a9ea00dff5","credit":"50000000000000000"}
+      [20:46:27] STRANGER assess(B3)  0xea682a158a1192487f1e285d27f1bf07846594224beea9b2eb7cd1bcae222f3a  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 79057750002823
 PASS  DEAR reads MEETS,MEETS,MEETS; dearer than the leader, it waits to be placed  - MEETS,MEETS,MEETS (3 agree, 0 disagree, 2 idle)
-      [21:11:40] STRANGER place(B3, )  0x284c87046228060141e20b52ea3deb2ba8bfee275bcc744a74f6d90b14cacba2  3 agree, 0 disagree, 2 idle  ERROR
+      [20:47:08] STRANGER place(B3, )  0x25db44cffdb1de0d6991ccd7dd2a07876fc6685c2beaddcdb5fd30c0ac7e8645  FINALIZED FINISHED_WITH_ERROR  3 agree, 0 disagree, 2 idle  fee 78628000002823
 PASS  STRANGER tries to place DEAR at the head, ahead of the cheaper MIDDLE: refused  - [EXPECTED] B3 does not come before the leader B2; place it after a placed bid
-      [21:12:22] STRANGER place(B3, B2)  0x22ac386429253b57206ee84c5816de72db5c8b909670dc42fb92198449d29daa  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  STRANGER places DEAR after MIDDLE; the contract checks both neighbours; MIDDLE leads  - 3 agree, 0 disagree, 2 idle
+      [20:47:52] STRANGER place(B3, B2)  0x5bf7cb729c8fd43f2c21af7ea9c605cf20170b2976462e6315c4c6f28f6b3f7b  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78629250003529
+PASS  STRANGER places DEAR after MIDDLE; the contract checks both neighbours; MIDDLE leads  - 4 agree, 0 disagree, 1 idle
 
-[21:12:22] ---- 9: the award and the payment
-      [21:31:19] STRANGER award(T1)  0x5677b3cbde099900e55dc8f2a5922831f293238cbb36206146389341d1058693  4 agree, 0 disagree, 1 idle  SUCCESS
-PASS  STRANGER awards T1: MIDDLE's B2 wins at 0.8 GEN and 0.4 GEN goes back to BUYER in the same call  - 4 agree, 0 disagree, 1 idle
-      [21:32:01] STRANGER complete(T1)  0xb64b1bfced2f4d4306acc15348a70a921c605dd04f9d52d709af113ec05da4d9  3 agree, 0 disagree, 2 idle  ERROR
+[20:47:52] ---- 9: the award and the payment
+      [20:47:56] waiting 1086 s, by the chain clock, for the appeal window to close
+      [21:06:42] STRANGER award(T1)  0xca6c727b05e95f8603cf95f575667d38e4e267ebc4b4df19e180f592b2f0d525  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126306750002823
+PASS  STRANGER awards T1: MIDDLE's B2 wins at 0.8 GEN and 0.4 GEN goes back to BUYER in the same call  - 3 agree, 0 disagree, 2 idle
+      [21:07:23] STRANGER complete(T1)  0x9d2c66c5ba9c90c4e828ebb1c477b5e6c38d38d5b23904a8329911bf60b0be1f  FINALIZED FINISHED_WITH_ERROR  3 agree, 0 disagree, 2 idle  fee 78628000002823
 PASS  STRANGER tries to release the payment: refused, only the buyer  - [EXPECTED] only the buyer of T1 may release its payment
-      [21:32:40] BUYER complete(T1)  0x0f21129bfddca8e1affa71ddffddb6838b968c9cf0a249b2889fe60bb2a1bbdf  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  BUYER releases the 0.8 GEN to MIDDLE  - 5 agree, 0 disagree, 0 idle
-      [21:33:18] STRANGER reclaim(B4)  0x597ae2bfd8c16a5c5bba662344f73d8e29ce978a6f5c84585eed2a97876d824e  3 agree, 0 disagree, 2 idle  ERROR
+      [21:08:04] BUYER complete(T1)  0xefbbb99425b44a1c8f5f2e812ab43751a863d2fb2e91a05d3f49137efa01414d  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126306000002823
+PASS  BUYER releases the 0.8 GEN to MIDDLE  - 3 agree, 0 disagree, 2 idle
+      [21:08:46] STRANGER reclaim(B4)  0x54f8907cd156f930c939289a39171ba15f9cb98edfd7c8611053c1555bcb0c3b  FINALIZED FINISHED_WITH_ERROR  3 agree, 0 disagree, 2 idle  fee 78628000002823
 PASS  STRANGER tries to reclaim its over-budget bid's bond again: refused, it went back to credit at the reveal  - [EXPECTED] B4 holds no bond to reclaim
-      [21:33:57] STRANGER reclaim(B1)  0xde08e627cd6482dc2976eceeded2e6d72fa6744f511c713125da05279d035eab  3 agree, 0 disagree, 2 idle  SUCCESS
+      [21:09:27] STRANGER reclaim(B1)  0x469ff56147cc9dabf55dc9926d663ff19d3489e62e03eee854ba1fee07ff7fd8  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78630000002823
 PASS  STRANGER reclaims B1: its 0.05 GEN bond goes to CHEAP's credit  - 3 agree, 0 disagree, 2 idle
-      [21:34:35] STRANGER reclaim(B2)  0x7eef36e70db6f7019eac002b50462c447baf66cf47635f0f2da57ec5a7e2ab18  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  STRANGER reclaims B2: its 0.05 GEN bond goes to MIDDLE's credit  - 3 agree, 0 disagree, 2 idle
-      [21:35:18] STRANGER reclaim(B3)  0xd3ac2d4ab1be4a5c129d201c9c35696c2520220220281a47e743558ac27de058  3 agree, 0 disagree, 2 idle  SUCCESS
+      [21:10:07] STRANGER reclaim(B2)  0x2af2e6556527ad1409b0ddf6be9acf5501caba5b707dd4cf3feab20b34b47d2e  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 78630000003529
+PASS  STRANGER reclaims B2: its 0.05 GEN bond goes to MIDDLE's credit  - 4 agree, 0 disagree, 1 idle
+      [21:10:47] STRANGER reclaim(B3)  0x71cc113ed0e6f8f5f5d8115a91aaa17069765079b4d1f7ddcbf7bc4904036e94  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 78630000002823
 PASS  STRANGER reclaims B3: its 0.05 GEN bond goes to DEAR's credit  - 3 agree, 0 disagree, 2 idle
-      [21:35:57] CHEAP withdraw(50000000000000000)  0x09eaba3b926c0d653f10b67fc5c2b813c4458905fa0fd1fab54b287d17b408d0  5 agree, 0 disagree, 0 idle  SUCCESS
-PASS  CHEAP withdraws 0.05 GEN of credit  - 5 agree, 0 disagree, 0 idle
-      [21:36:35] MIDDLE withdraw(100000000000000000)  0x4f3670997e238705b22cbf7b06cc3c7cb951997c278b98df06ac15efe1236a60  3 agree, 0 disagree, 2 idle  SUCCESS
-PASS  MIDDLE withdraws 0.1 GEN of credit  - 3 agree, 0 disagree, 2 idle
-      [21:37:24] DEAR withdraw(50000000000000000)  0x53dc411a02efb3b85d7c2eadcbc0ad991eec5ea923cc9867e92f58d177c80827  3 agree, 0 disagree, 2 idle  SUCCESS
+      [21:11:27] CHEAP withdraw(50000000000000000)  0xe4c7247df25537a294c635303111a4f708895ec4e94dc3cfff3e7bd68a75c361  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126305000002823
+PASS  CHEAP withdraws 0.05 GEN of credit  - 3 agree, 0 disagree, 2 idle
+      [21:12:06] MIDDLE withdraw(100000000000000000)  0xdf7e46fa9cec759e2690ee6212281a4408e603f79796c0cfe211dafdd90a90b9  FINALIZED FINISHED_WITH_RETURN  4 agree, 0 disagree, 1 idle  fee 126305000003529
+PASS  MIDDLE withdraws 0.1 GEN of credit  - 4 agree, 0 disagree, 1 idle
+      [21:12:47] DEAR withdraw(50000000000000000)  0x7004bd4da69e9d978efa109e7505bcd3ecae5498baebbbe0a8a94b3b5d214583  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126305000002823
 PASS  DEAR withdraws 0.05 GEN of credit  - 3 agree, 0 disagree, 2 idle
-      [21:38:02] STRANGER withdraw(50000000000000000)  0x10500937e628cfbcf25eb4997a43cc0cc6b15c5dd813e2d285bc092795e83f32  3 agree, 0 disagree, 2 idle  SUCCESS
+      [21:13:27] STRANGER withdraw(50000000000000000)  0xe536df82bd1efcaa682cff9133bc4a3bd34fb957c977818a7bb00585a057c5fe  FINALIZED FINISHED_WITH_RETURN  3 agree, 0 disagree, 2 idle  fee 126305000002823
 PASS  STRANGER withdraws 0.05 GEN of credit  - 3 agree, 0 disagree, 2 idle
 
-[21:38:03] ---- 10: views, code and money
-PASS  tender(T1): paid, four bids, three eligible, one over budget, three assessed, two compliant, one appeal, one challenge  - {"tender":"T1","buyer":"0xedc76750fb4f334c9f3ea5417054b8c1ff7ea615","title":"Repaint Elm Street Primary classrooms","scope":"Repaint the walls and ceilings of the twelve classrooms at Elm Street Prima
+[21:13:28] ---- 10: views, code and money
+PASS  tender(T1): paid, four bids, three eligible, one over budget, three assessed, two compliant, one appeal, one challenge  - {"tender":"T1","buyer":"0x84141700c796ac2c8636dafa5793d42757393e43","title":"Repaint Elm Street Primary classrooms","scope":"Repaint the walls and ceilings of the twelve classrooms at Elm Street Prima
 PASS  bids_of(T1): every bid with its price, proposal, salt, mask and fingerprint  - ["revealed MEETS,MISSES,MEETS","revealed MEETS,MEETS,MEETS","revealed MEETS,MEETS,MEETS","over_budget "]
 PASS  rules(): the question word for word, both orders, the combine table and the limits  - value,question,answers,prompt,askings,reading,combine,compared,not_asked,award,appeal,challenge,money,settlement,windows,who,commitment,sizes,limits,untrusted
-PASS  stats(): one tender, four bids, one awarded and paid, three assessed, one appeal, one challenge, nothing held  - {"tenders":1,"bids":4,"awarded":1,"no_award":0,"paid":1,"waived":0,"assessed":3,"appeals":1,"overturned":0,"challenges":1,"knocked_out":0,"refunds":3,"credits_held":"0","budgets_held":"0","bonds_held":"0","paid_total":"800000000000000000","returned_total":"400000000000000000","to_buyers_total":"50000000000000000","balance_owed":"0","now":1795037893}
+PASS  stats(): one tender, four bids, one awarded and paid, three assessed, one appeal, one challenge, nothing held  - {"tenders":1,"bids":4,"awarded":1,"no_award":0,"paid":1,"waived":0,"assessed":3,"appeals":1,"overturned":0,"challenges":1,"knocked_out":0,"refunds":3,"credits_held":"0","budgets_held":"0","bonds_held":"0","paid_total":"800000000000000000","returned_total":"400000000000000000","to_buyers_total":"50000000000000000","balance_owed":"0","now":1795641218}
 PASS  the contract's own balance is zero  - 0
-PASS  the code deployed at 0xcb8446a72832Bb88DFD531D531f938269E0E06dB is byte for byte contracts/tender.py  - 88108 bytes, sha256 db5e1d1389ccba43dfe588f965bf17628a9a6ce188227cdf4ef04d6f1e4609d6
-PASS  over the run every account ends exactly where the receipts say: MIDDLE 0.85 GEN up (the price and DEAR's challenge bond), CHEAP and DEAR 0.05 GEN down (their upheld appeal and challenge), BUYER 0.75 GEN down  - BUYER -0.75 (receipts -0.75)  CHEAP -0.05 (receipts -0.05)  MIDDLE 0.85 (receipts 0.85)  DEAR -0.05 (receipts -0.05)  STRANGER 0 (receipts 0)
+PASS  the code deployed at 0x746592c85bb3005484d49e9A6A0fbBc8363a6C13 is byte for byte contracts/tender.py  - 87478 bytes, sha256 1bc56ba8e72ab2f91a9a8e7d8dc9fd6e45fe20fe56a08c3f7ed678839a906c6d
+PASS  over the run every account ends exactly where the receipts say, less exactly the fees its own transactions paid: MIDDLE 0.85 GEN up (the price and DEAR's challenge bond), CHEAP and DEAR 0.05 GEN down (their upheld appeal and challenge), BUYER 0.75 GEN down  - BUYER -0.7505368657500149 (receipts -0.75, fees 0.000536865750014821)  CHEAP -0.05056757200001835 (receipts -0.05, fees 0.00056757200001835)  MIDDLE 0.8496377947499874 (receipts 0.85, fees 0.000362205250012704)  DEAR -0.05051994600001659 (receipts -0.05, fees 0.000519946000016586)  STRANGER -0.001402398250048698 (receipts 0, fees 0.001402398250048698)
+PASS  every one of the 36 transactions is FINALIZED with an execution result of FINISHED_WITH_RETURN or FINISHED_WITH_ERROR, and every one paid a fee
 
-44 passed, 0 failed
-Tender: 0xcb8446a72832Bb88DFD531D531f938269E0E06dB
+46 passed, 0 failed
+Tender: 0x746592c85bb3005484d49e9A6A0fbBc8363a6C13
 transactions: 36 in 36 steps; sent a second time: none
-assess_cheap       0x76059784598b5c3b3e8201be6bdf8240c29d1a5e233cb6228579817061433058 3 agree, 1 disagree, 1 idle  B1  MEETS,MISSES,MEETS
-appeal_cheap       0x657695fe9046973d5ef6917e764d1f0beccc0d34219f840be807ef61dc81193a 3 agree, 0 disagree, 2 idle  B1 upheld MEETS,MISSES,MEETS
-assess_middle      0xd1d2d663ae53f92e8a610caf2edecac3d680a8d4e75de1710afdd167482edfeb 3 agree, 0 disagree, 2 idle  B2  MEETS,MEETS,MEETS
-challenge_middle   0x2e4370055bf645390c6b0abd818c465b9e3ae7e2561a40a469bd8c8e5da15153 3 agree, 0 disagree, 2 idle  B2 upheld MEETS,MEETS,MEETS
-assess_dear        0xd39fe5d338cfa1baf4c0449f3e7612ee52865991f093fa82e33da400599123a0 3 agree, 0 disagree, 2 idle  B3  MEETS,MEETS,MEETS
-
-exit 0
+assess_cheap       0x04cea39c00589837daafefbd59e85d174747c5b09ff186711e52e0070715c8f3 3 agree, 0 disagree, 2 idle  B1  MEETS,MISSES,MEETS
+appeal_cheap       0xf4c496445f0b9f34a641785cf3d79a5c371f7f59b2b94564be0c13207a89f797 3 agree, 0 disagree, 2 idle  B1 upheld MEETS,MISSES,MEETS
+assess_middle      0xc05642430d805aa90c06252743bf22bb849072bef59cbd5f1c1d7f253671cc20 3 agree, 0 disagree, 2 idle  B2  MEETS,MEETS,MEETS
+challenge_middle   0x346c8bc42894d6e0596eb10a4a003d67abebd681a13bd282e453f2401595b214 3 agree, 0 disagree, 2 idle  B2 upheld MEETS,MEETS,MEETS
+assess_dear        0xea682a158a1192487f1e285d27f1bf07846594224beea9b2eb7cd1bcae222f3a 3 agree, 0 disagree, 2 idle  B3  MEETS,MEETS,MEETS
+fees paid, atto: {"buyer":"536865750014821","cheap":"567572000018350","middle":"362205250012704","dear":"519946000016586","stranger":"1402398250048698"}

@@ -155,3 +155,28 @@ by the contract, and that the delimiter is written in exactly one place.
 A bidder can send the bond with the bid, or deposit once and bid from credit. Bonds that come back go to credit,
 so they can be reused for the next bid or for an appeal without another payable call. The appeal has to run the
 model, so it cannot carry value. Its bond can only come from credit.
+
+## GenVM v0.4 and Studio v0.123 fees
+
+Studio (chain 61999) moved to v0.123 on 25 Nov 2026: every deploy and write must carry fees, and new contracts
+run on GenVM v0.4. Tender was moved to both before it was submitted, with the same behaviour; the earlier v0.2
+register is no longer used. What changed, and nothing else:
+
+- The header pins the v0.4 runner (`# v0.4.0`, `py-genlayer:kzybg95x…`), and the contract is written to the v0.4
+  API: `import genlayer as gl`, `gl.contract.Contract`, `@gl.storage.allow`, plain ints instead of `u256(...)`
+  wrappers, `gl.vm.run_nondet` in place of `run_nondet_unsafe`, the clock read from `gl.message.raw["datetime"]`.
+- Value leaves the contract in one place, `_send()`, through `gl.chain.Account(address).emit_transfer(amount)`,
+  in place of the old empty EVM interface. A static test checks that `emit_transfer` appears there and nowhere
+  else, and that each settlement still makes at most one transfer.
+- The smoke, the demo tool and the site use genlayer-js 2.0.0. Every deploy and write carries the distribution
+  and fee value quoted by `estimateTransactionFees()`, with the leader and validator time-unit allocations at the
+  policy's maximum (600) so an assessment's six model calls fit. The per-write estimate
+  (`estimateTransactionFeesForWrite`) fails on Studio with "fee below_minimum", so it is not used.
+- A transaction counts as done when its status is `FINALIZED` and its execution result
+  (`txExecutionResultName`) is `FINISHED_WITH_RETURN`, or `FINISHED_WITH_ERROR` for a raised refusal. The site
+  reads the execution result from the transaction and falls back to the leader's receipt only when it is absent.
+- What a transaction cost its sender is `fee_accounting.paid_fee_value - total_refunded`. The smoke subtracts
+  each account's own fees from its money table, so every balance is still checked to the atto.
+- `genvm-lint` 0.11.1rc2 reports E014 ("needs @allow_storage decorator") for `Tender` and `Bid`. That is a false
+  positive on the v0.4 runner, where the decorator is `@gl.storage.allow` and `allow_storage` does not exist; it is
+  the only finding, and validation passes.

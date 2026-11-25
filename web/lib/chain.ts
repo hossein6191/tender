@@ -13,6 +13,7 @@ import { studionet } from "genlayer-js/chains";
 import { getAddress, type Address } from "viem";
 import { notify } from "./browser-store";
 import { contractAddress } from "./config";
+import { quoteFees } from "./fees";
 import { RULES_COPY } from "./contract-rules";
 import { idNumber, sentence } from "./format";
 import { asRow, mapBid, mapBidPage, mapCredit, mapMyPage, mapStats, mapTender, mapTenderPage, num, parseView, str } from "./parse";
@@ -143,7 +144,14 @@ export async function write(call: Call): Promise<string> {
   const chainId = await getChainId(signer.provider);
   if (chainId !== CHAIN_ID) throw new Error(WRONG_CHAIN(chainId));
   const client = createClient({ chain: studio, account: signer.address as Address, provider: signer.provider });
-  const hash = await client.writeContract({ address: address as Address, functionName: call.fn, args: call.args as never, value: call.value ?? 0n });
+  // Studio v0.123 charges a fee on every write: quoted first, then carried with the call
+  let fees;
+  try {
+    fees = await quoteFees(client);
+  } catch {
+    throw new Error("Studio did not quote the network fee for this call, so nothing was sent. Try again in a minute.");
+  }
+  const hash = await client.writeContract({ address: address as Address, functionName: call.fn, args: call.args as never, value: call.value ?? 0n, fees } as never);
   if (typeof hash !== "string" || !hash.startsWith("0x")) throw new Error("The wallet returned no transaction hash.");
   return hash;
 }

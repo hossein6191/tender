@@ -149,9 +149,12 @@ const MONEY_SENT: Partial<Record<WriteFn, string>> = {
 
 const judged = (fn: WriteFn) => fn === "assess" || fn === "appeal" || fn === "challenge";
 
+/** Studio v0.123 charges a small network fee on every write; the wallet shows it as part of what it sends. */
+export const FEE_NOTE = "Studio also charges a small network fee: the wallet sends a deposit of about 0.1 GEN with the call, and what the transaction does not use comes back when it is final.";
+
 /** While the wallet asks for a signature. */
 export function signGuide(fn: WriteFn): Guide {
-  return { id: `sign:${fn}`, tone: "busy", kicker: "Your wallet", now: `Your wallet is asking you to sign ${NOUN[fn]}.`, time: "As long as you take. Nothing is sent until you sign.", need: "Check the call in the wallet and sign it, or cancel.", mustAct: true, leave: "Not yet: the wallet prompt belongs to this page.", canLeave: false, money: MONEY_SENT[fn] ?? "Nothing moves until you sign." };
+  return { id: `sign:${fn}`, tone: "busy", kicker: "Your wallet", now: `Your wallet is asking you to sign ${NOUN[fn]}.`, time: "As long as you take. Nothing is sent until you sign.", need: "Check the call in the wallet and sign it, or cancel. The amount includes the small network fee.", mustAct: true, leave: "Not yet: the wallet prompt belongs to this page.", canLeave: false, money: (MONEY_SENT[fn] ?? "Nothing moves until you sign.") + " " + FEE_NOTE };
 }
 
 /** While a sent transaction goes through. */

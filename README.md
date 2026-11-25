@@ -14,7 +14,8 @@ requirements, and the award follows from a fixed rule.
 
 ## What it is
 
-An Intelligent Contract on GenLayer, `contracts/tender.py`. One deployment holds any number of tenders.
+An Intelligent Contract on GenLayer, `contracts/tender.py`, written for GenVM v0.4. One deployment holds any
+number of tenders.
 
 1. **The buyer opens a tender.** It has a title, a plain-text scope, one to six requirements (for example
    "Paints all 12 classrooms", "Uses low-VOC paint", "Finishes within the summer break"), a bid bond, and three
@@ -178,8 +179,9 @@ not check its sender, with the reason it is open. Any write added later that is 
 - `tests/test_pure.py`: the offline suite. A stub stands in for the runtime, and a small simulator gives the
   leader and each validator its own scripted model.
 - `tools/mutate.py` and `tests/MUTATIONS.md`: every defence removed in turn, and the test that caught it.
-- `tests/on_chain/smoke.mjs`: the on-chain walk of the classroom tender on Studio (chain 61999). It ends by
-  checking that the deployed code is byte for byte `contracts/tender.py`.
+- `tests/on_chain/smoke.mjs`: the on-chain walk of the classroom tender on Studio (chain 61999, v0.123), with
+  quoted fees on every transaction. It ends by checking that the deployed code is byte for byte
+  `contracts/tender.py`.
 - `DECISIONS.md`: why the contract is shaped this way.
 - `docs/DEMO.md`: the plan for a demo bot, so a visitor bidding alone can walk the whole flow on the site.
 
@@ -187,10 +189,10 @@ not check its sender, with the reason it is open. Any write added later that is 
 
 ```
 pip install -r requirements-dev.txt
-pytest tests/ -q                       # 207 passed, no network
-genvm-lint check contracts/tender.py   # Lint passed (3 checks), Validation passed
+pytest tests/ -q                       # 208 passed, no network
+genvm-lint check contracts/tender.py   # Validation passed; two E014 warnings, a known false positive on v0.4
 python tools/mutate.py                 # 190 / 190 killed, rewrites tests/MUTATIONS.md
-npm ci && node tests/on_chain/smoke.mjs   # the on-chain walk; deploys its own copy
+npm ci && node tests/on_chain/smoke.mjs   # the on-chain walk with genlayer-js 2.0 and fees; deploys its own copy
 ```
 
 The smoke walks a three-requirement tender for repainting a school's classrooms. There are three bids. The
@@ -204,52 +206,68 @@ to the winner. A wrong placement hint is refused, and the held bonds are reclaim
 
 ## Evidence
 
-Run on 19 Nov 2026 on GenLayer Studio (chain 61999) by `tests/on_chain/smoke.mjs`, from generated accounts funded from the
-Studio faucet, none of them anybody's wallet: BUYER, CHEAP, MIDDLE, DEAR and STRANGER are fresh accounts funded for this run.. **44 passed, 0 failed**; transactions: 36 in 36 steps; sent a second time: none.
-The whole log is `tests/on_chain/smoke-run.log`. Three sealed bids on a classroom-painting tender: the cheapest never commits to low-VOC paint and reads MISSES (its appeal is upheld), the middle bid meets all three requirements, survives a rival's challenge and wins at 0.8 GEN, and 0.4 GEN of the budget goes back to the buyer in the same call.
+Tender moved to GenVM v0.4 and Studio v0.123, where every deploy and write pays a fee, before it was submitted.
+The contract's behaviour did not change; the earlier register on the v0.2 runner is no longer used, and its
+evidence is replaced by this run.
 
-- `deploy` deployed at [`0xcb8446a72832Bb88DFD531D531f938269E0E06dB`](https://explorer-studio.genlayer.com/address/0xcb8446a72832Bb88DFD531D531f938269E0E06dB)
+Run on 25 Nov 2026 on GenLayer Studio v0.123 (chain 61999) by `tests/on_chain/smoke.mjs` with genlayer-js 2.0.0,
+from generated accounts funded from the Studio faucet, none of them anybody's wallet: BUYER, CHEAP, MIDDLE, DEAR
+and STRANGER are fresh accounts funded for this run. **46 passed, 0 failed**; one deployment and 35 transactions in
+36 steps; sent a second time: none. Every transaction carried the fee quoted by `estimateTransactionFees()`, and
+every one ended `FINALIZED` with an execution result of `FINISHED_WITH_RETURN` or `FINISHED_WITH_ERROR`. The whole
+log is `tests/on_chain/smoke-run.log`.
 
-- the code deployed at 0xcb8446a72832Bb88DFD531D531f938269E0E06dB is byte for byte contracts/tender.py: 88108 bytes, sha256 db5e1d1389ccba43dfe588f965bf17628a9a6ce188227cdf4ef04d6f1e4609d6
+Three sealed bids on a classroom-painting tender: the cheapest never commits to low-VOC paint and reads MISSES
+(its appeal is upheld), the middle bid meets all three requirements, survives a rival's challenge and wins at
+0.8 GEN, and 0.4 GEN of the budget goes back to the buyer in the same call.
 
-| step | by | transactions | votes |
-|---|---|---|---|
-| Tender is deployed and holds nothing yet | BUYER | [0x83526039…](https://explorer-studio.genlayer.com/tx/0x83526039a111783f232a94d15be7e73978c4cd47f18aedb91dbbd38a75a01e0a) | 3 agree, 0 disagree, 2 idle |
-| BUYER opens with 0.05 GEN, under the 0.1 GEN floor: refused and every atto returned | BUYER | [0x816f0986…](https://explorer-studio.genlayer.com/tx/0x816f09865f25a6c5d0031543741ef636889ce69f8460cac9db272f436b030a68) | 5 agree, 0 disagree, 0 idle |
-| BUYER opens T1 with a 1.2 GEN budget held in escrow and three requirements; no model runs | BUYER | [0xfb4d377c…](https://explorer-studio.genlayer.com/tx/0xfb4d377c1adcfda055754335b11db425daf1e464627e69dc8e68e2c8dfd46472) | 5 agree, 0 disagree, 0 idle |
-| CHEAP commits a sealed bid, B1, staking the 0.05 GEN bond with the call | CHEAP | [0x3a748234…](https://explorer-studio.genlayer.com/tx/0x3a7482346f6a30043517a9352f7313fc363ab6a61a2b29c4e44e3f5cb45a7319) | 3 agree, 0 disagree, 2 idle |
-| MIDDLE deposits 0.05 GEN of credit | MIDDLE | [0xae3f3c61…](https://explorer-studio.genlayer.com/tx/0xae3f3c618fff5ed1ec9f418e76d9baf5536ce57a23c5379f6b80d0b3d7ec9006) | 4 agree, 0 disagree, 1 idle |
-| MIDDLE commits B2 with the bond taken from credit | MIDDLE | [0xc1ebc5e5…](https://explorer-studio.genlayer.com/tx/0xc1ebc5e57df4c7e1c7c74157f34b797cfe4478e35919062d098eb0b507f69af3) | 3 agree, 0 disagree, 2 idle |
-| DEAR commits B3 | DEAR | [0x06a3546c…](https://explorer-studio.genlayer.com/tx/0x06a3546c2f70562633bb0211428481ae095ff5b649db108becf252b0e4da2ad4) | 4 agree, 0 disagree, 1 idle |
-| STRANGER commits B4; its price is sealed, so nobody can tell yet that it is over the budget | STRANGER | [0x4187217a…](https://explorer-studio.genlayer.com/tx/0x4187217ae7512412ebaafc1d722cc5bb446bf2172e7c68d995281203ad9679d9) | 5 agree, 0 disagree, 0 idle |
-| CHEAP deposits 0.05 GEN of credit, ready for an appeal or a challenge bond | CHEAP | [0x8700dbdc…](https://explorer-studio.genlayer.com/tx/0x8700dbdcc79ba2ee3ad8688f78c6bf9b409db06283cd34d589733d9f0881e62b) | 3 agree, 0 disagree, 2 idle |
-| DEAR deposits 0.05 GEN of credit, ready for an appeal or a challenge bond | DEAR | [0xc4032000…](https://explorer-studio.genlayer.com/tx/0xc4032000d56e7e98742c6d6ebf0f80e001a3f3c1bf582611cb4d4ea1a8a6fea7) | 5 agree, 0 disagree, 0 idle |
-| BUYER tries to bid on its own tender: refused, recorded, and the bond returned | BUYER | [0x2e5df41b…](https://explorer-studio.genlayer.com/tx/0x2e5df41b5ed748d8f3c078ebbfdf038ca8e4f49bed10df6a2dc382535f35a957) | 3 agree, 0 disagree, 2 idle |
-| STRANGER bids after the bidding deadline: refused and the bond returned | STRANGER | [0x539ea0c8…](https://explorer-studio.genlayer.com/tx/0x539ea0c8ecca1bf9ac9dc95943175f1211c964bb65730543176b18b800c394c6) | 3 agree, 0 disagree, 2 idle |
-| CHEAP reveals with the wrong salt: refused, nothing stored | CHEAP | [0x77e83288…](https://explorer-studio.genlayer.com/tx/0x77e832881abca2b9ce3d0cf0236bcbd281d7a70920175b3aa99a70eae0e4427a) | 3 agree, 0 disagree, 2 idle |
-| CHEAP reveals B1 at 0.6 GEN; its bond stays held until the award | CHEAP | [0xc1c22803…](https://explorer-studio.genlayer.com/tx/0xc1c2280378eb359b9c02f48194f7d35d7ab35923a6c79a0e3569d666de0cec6c) | 3 agree, 0 disagree, 2 idle |
-| MIDDLE reveals B2 at 0.8 GEN; its bond stays held until the award | MIDDLE | [0x86a62afe…](https://explorer-studio.genlayer.com/tx/0x86a62afe9f266a720c6df08e315d3b93c868525055273c5dce1de732fed8811b) | 5 agree, 0 disagree, 0 idle |
-| DEAR reveals B3 at 1 GEN; its bond stays held until the award | DEAR | [0xf02c649d…](https://explorer-studio.genlayer.com/tx/0xf02c649db5669248030703bd07d75a4a7355b894059e5b66d123191acbff945f) | 3 agree, 0 disagree, 2 idle |
-| STRANGER reveals B4 at 1.5 GEN: recorded as over_budget, so it cannot win | STRANGER | [0xac2fab58…](https://explorer-studio.genlayer.com/tx/0xac2fab583bdedc00fe93101fd8edee7df981338d180f9c1f749b1ab954146dd8) | 3 agree, 0 disagree, 2 idle |
-| STRANGER tries to award T1 before any bid is assessed: refused | STRANGER | [0x72251cb8…](https://explorer-studio.genlayer.com/tx/0x72251cb80ffc7d09507fe358e7a05f0f9f6efecdd2d837447336b4dc68cb5508) | 5 agree, 0 disagree, 0 idle |
-| CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint | STRANGER | [0x76059784…](https://explorer-studio.genlayer.com/tx/0x76059784598b5c3b3e8201be6bdf8240c29d1a5e233cb6228579817061433058) | 3 agree, 1 disagree, 1 idle |
-| CHEAP's appeal is upheld: the reason is not part of the proposal, and the 0.05 GEN appeal bond reaches BUYER from CHEAP's credit | CHEAP | [0x657695fe…](https://explorer-studio.genlayer.com/tx/0x657695fe9046973d5ef6917e764d1f0beccc0d34219f840be807ef61dc81193a) | 3 agree, 0 disagree, 2 idle |
-| MIDDLE reads MEETS,MEETS,MEETS and goes to the head of the ordered list | STRANGER | [0xd1d2d663…](https://explorer-studio.genlayer.com/tx/0xd1d2d663ae53f92e8a610caf2edecac3d680a8d4e75de1710afdd167482edfeb) | 3 agree, 0 disagree, 2 idle |
-| DEAR's challenge of MIDDLE is upheld: no requirement reads MISSES, MIDDLE keeps the lead, and DEAR's 0.05 GEN bond goes to MIDDLE's credit | DEAR | [0x2e437005…](https://explorer-studio.genlayer.com/tx/0x2e4370055bf645390c6b0abd818c465b9e3ae7e2561a40a469bd8c8e5da15153) | 3 agree, 0 disagree, 2 idle |
-| DEAR reads MEETS,MEETS,MEETS; dearer than the leader, it waits to be placed | STRANGER | [0xd39fe5d3…](https://explorer-studio.genlayer.com/tx/0xd39fe5d338cfa1baf4c0449f3e7612ee52865991f093fa82e33da400599123a0) | 3 agree, 0 disagree, 2 idle |
-| STRANGER tries to place DEAR at the head, ahead of the cheaper MIDDLE: refused | STRANGER | [0x284c8704…](https://explorer-studio.genlayer.com/tx/0x284c87046228060141e20b52ea3deb2ba8bfee275bcc744a74f6d90b14cacba2) | 3 agree, 0 disagree, 2 idle |
-| STRANGER places DEAR after MIDDLE; the contract checks both neighbours; MIDDLE leads | STRANGER | [0x22ac3864…](https://explorer-studio.genlayer.com/tx/0x22ac386429253b57206ee84c5816de72db5c8b909670dc42fb92198449d29daa) | 3 agree, 0 disagree, 2 idle |
-| STRANGER awards T1: MIDDLE's B2 wins at 0.8 GEN and 0.4 GEN goes back to BUYER in the same call | STRANGER | [0x5677b3cb…](https://explorer-studio.genlayer.com/tx/0x5677b3cbde099900e55dc8f2a5922831f293238cbb36206146389341d1058693) | 4 agree, 0 disagree, 1 idle |
-| STRANGER tries to release the payment: refused, only the buyer | STRANGER | [0xb64b1bfc…](https://explorer-studio.genlayer.com/tx/0xb64b1bfced2f4d4306acc15348a70a921c605dd04f9d52d709af113ec05da4d9) | 3 agree, 0 disagree, 2 idle |
-| BUYER releases the 0.8 GEN to MIDDLE | BUYER | [0x0f21129b…](https://explorer-studio.genlayer.com/tx/0x0f21129bfddca8e1affa71ddffddb6838b968c9cf0a249b2889fe60bb2a1bbdf) | 5 agree, 0 disagree, 0 idle |
-| STRANGER tries to reclaim its over-budget bid's bond again: refused, it went back to credit at the reveal | STRANGER | [0x597ae2bf…](https://explorer-studio.genlayer.com/tx/0x597ae2bfd8c16a5c5bba662344f73d8e29ce978a6f5c84585eed2a97876d824e) | 3 agree, 0 disagree, 2 idle |
-| STRANGER reclaims B1: its 0.05 GEN bond goes to CHEAP's credit | STRANGER | [0xde08e627…](https://explorer-studio.genlayer.com/tx/0xde08e627cd6482dc2976eceeded2e6d72fa6744f511c713125da05279d035eab) | 3 agree, 0 disagree, 2 idle |
-| STRANGER reclaims B2: its 0.05 GEN bond goes to MIDDLE's credit | STRANGER | [0x7eef36e7…](https://explorer-studio.genlayer.com/tx/0x7eef36e70db6f7019eac002b50462c447baf66cf47635f0f2da57ec5a7e2ab18) | 3 agree, 0 disagree, 2 idle |
-| STRANGER reclaims B3: its 0.05 GEN bond goes to DEAR's credit | STRANGER | [0xd3ac2d4a…](https://explorer-studio.genlayer.com/tx/0xd3ac2d4ab1be4a5c129d201c9c35696c2520220220281a47e743558ac27de058) | 3 agree, 0 disagree, 2 idle |
-| CHEAP withdraws 0.05 GEN of credit | CHEAP | [0x09eaba3b…](https://explorer-studio.genlayer.com/tx/0x09eaba3b926c0d653f10b67fc5c2b813c4458905fa0fd1fab54b287d17b408d0) | 5 agree, 0 disagree, 0 idle |
-| MIDDLE withdraws 0.1 GEN of credit | MIDDLE | [0x4f367099…](https://explorer-studio.genlayer.com/tx/0x4f3670997e238705b22cbf7b06cc3c7cb951997c278b98df06ac15efe1236a60) | 3 agree, 0 disagree, 2 idle |
-| DEAR withdraws 0.05 GEN of credit | DEAR | [0x53dc411a…](https://explorer-studio.genlayer.com/tx/0x53dc411a02efb3b85d7c2eadcbc0ad991eec5ea923cc9867e92f58d177c80827) | 3 agree, 0 disagree, 2 idle |
-| STRANGER withdraws 0.05 GEN of credit | STRANGER | [0x10500937…](https://explorer-studio.genlayer.com/tx/0x10500937e628cfbcf25eb4997a43cc0cc6b15c5dd813e2d285bc092795e83f32) | 3 agree, 0 disagree, 2 idle |
+- `deploy` deployed at [`0x746592c85bb3005484d49e9A6A0fbBc8363a6C13`](https://explorer-studio.genlayer.com/address/0x746592c85bb3005484d49e9A6A0fbBc8363a6C13), on the v0.4 runner
+- the code deployed at 0x746592c85bb3005484d49e9A6A0fbBc8363a6C13 is byte for byte contracts/tender.py: 87478 bytes, sha256 1bc56ba8e72ab2f91a9a8e7d8dc9fd6e45fe20fe56a08c3f7ed678839a906c6d
+- fees, read from each transaction's own fee accounting (paid less refunded): 0.00339 GEN for the whole run.
+  A plain write cost about 0.000079 GEN, a write that sends value back about 0.000126 GEN, an assessment (one
+  consensus round, six model calls) about 0.000079 GEN, the appeal 0.000127 GEN and the challenge 0.000158 GEN.
+  Each quote deposits about 0.1 GEN; the unused part came back when the transaction was final.
+- every account ended exactly where the receipts say, less exactly the fees its own transactions paid: MIDDLE
+  0.85 GEN up, CHEAP and DEAR 0.05 GEN down, BUYER 0.75 GEN down, STRANGER even, and the contract holds nothing.
+
+| step | by | transactions | status, execution result | votes | fee paid (atto) |
+|---|---|---|---|---|---|
+| BUYER deploys contracts/tender.py on GenVM v0.4 with quoted fees: FINALIZED, FINISHED_WITH_RETURN, fee 79315000003529 atto | BUYER | [0x7e79d9d4…](https://explorer-studio.genlayer.com/tx/0x7e79d9d421a14310668053223a57898b3ab78717414bc37692862b8bb51d7908) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 79315000003529 |
+| BUYER opens with 0.05 GEN, under the 0.1 GEN floor: refused and every atto returned | BUYER | [0xc0213bad…](https://explorer-studio.genlayer.com/tx/0xc0213badb526da1f6a91458d91762c759b50d4858caae7fad98bf83016f45701) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126304250002823 |
+| BUYER opens T1 with a 1.2 GEN budget held in escrow and three requirements; no model runs | BUYER | [0x44d30c2d…](https://explorer-studio.genlayer.com/tx/0x44d30c2d0871f8ec355fc013e6d2c798a90d0ba75e6209c73b7c0a49dc1ab5ad) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78636250002823 |
+| CHEAP commits a sealed bid, B1, staking the 0.05 GEN bond with the call | CHEAP | [0xdbf1d317…](https://explorer-studio.genlayer.com/tx/0xdbf1d31770e8016a6b6103ce8c3e9978071652e43c8165e6669ac9c3155d5d7f) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78638000003529 |
+| MIDDLE deposits 0.05 GEN of credit | MIDDLE | [0xf9626b1f…](https://explorer-studio.genlayer.com/tx/0xf9626b1f8d4c5b3199b469f3afc6cb1e316652e84e941001c300a9452a91d756) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78629750002823 |
+| MIDDLE commits B2 with the bond taken from credit | MIDDLE | [0xa5605af9…](https://explorer-studio.genlayer.com/tx/0xa5605af9d0984b8c1e325564baba96c00b29c48547101da1f9998ce88e570fb0) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78640000002823 |
+| DEAR commits B3 | DEAR | [0xbaafbaf5…](https://explorer-studio.genlayer.com/tx/0xbaafbaf59316ec0579503dcb9e4364ccffbd4e57bef8dcaaf2695aaf44936d45) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78639750003529 |
+| STRANGER commits B4; its price is sealed, so nobody can tell yet that it is over the budget | STRANGER | [0x7f643070…](https://explorer-studio.genlayer.com/tx/0x7f64307052ac69c26d775f75707b58b0cbdf994d7bca01efd23a5763ab55b424) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78639750003529 |
+| CHEAP deposits 0.05 GEN of credit, ready for an appeal or a challenge bond | CHEAP | [0x47a5d1d4…](https://explorer-studio.genlayer.com/tx/0x47a5d1d438e497820c1a084242b41de2c1deba51d9f6c4b3cc9baf18b7880716) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78629750003529 |
+| DEAR deposits 0.05 GEN of credit, ready for an appeal or a challenge bond | DEAR | [0xe2e131fc…](https://explorer-studio.genlayer.com/tx/0xe2e131fcbfb8baf56d0ac2f2637140adb6a98af055b1f18950f399ecd55fe7f9) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78630250002823 |
+| BUYER tries to bid on its own tender: refused, recorded, and the bond returned | BUYER | [0x842a0eeb…](https://explorer-studio.genlayer.com/tx/0x842a0eebd678c19237e65d962267397d9e86715922152004d9fdf78b17baf5f6) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126304250002823 |
+| STRANGER bids after the bidding deadline: refused and the bond returned | STRANGER | [0x04c7de8b…](https://explorer-studio.genlayer.com/tx/0x04c7de8b0ab411962a2f64c7c0a81261500a3bcf8d9f43f9a1c3409c82dcec86) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 126304250003529 |
+| CHEAP reveals with the wrong salt: refused, nothing stored | CHEAP | [0x48eac63d…](https://explorer-studio.genlayer.com/tx/0x48eac63d68a6ecc5d7331c419981f0a503fcca6b691a1fdb5099ae656659c0d4) | FINALIZED, FINISHED_WITH_ERROR | 3 agree, 0 disagree, 2 idle | 78628000002823 |
+| CHEAP reveals B1 at 0.6 GEN; its bond stays held until the award | CHEAP | [0x4cb8b1f6…](https://explorer-studio.genlayer.com/tx/0x4cb8b1f63f9c45a207d9a9e96c9edf6721299e906ef92017c8bcc0c59dfe027c) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78630750002823 |
+| MIDDLE reveals B2 at 0.8 GEN; its bond stays held until the award | MIDDLE | [0x37d7ea70…](https://explorer-studio.genlayer.com/tx/0x37d7ea704ceeacfe7e047b97c7f364e1c739876545ccabf14e16601b23b77a2f) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78630500003529 |
+| DEAR reveals B3 at 1 GEN; its bond stays held until the award | DEAR | [0xcdf09afa…](https://explorer-studio.genlayer.com/tx/0xcdf09afa648744eb5a1f306ed4b5fdb0ff8187423ce6182e30d75c50df036582) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78630500002823 |
+| STRANGER reveals B4 at 1.5 GEN: recorded as over_budget, so it cannot win | STRANGER | [0xf04e811e…](https://explorer-studio.genlayer.com/tx/0xf04e811ed25e49e70f869c903bc387316f835c0eb4b17f087bb2512ae5493360) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78633500003529 |
+| STRANGER tries to award T1 before any bid is assessed: refused | STRANGER | [0x09172161…](https://explorer-studio.genlayer.com/tx/0x09172161e909fd2508ecd34592489f5197e82f709a337165928b4c5646772fb6) | FINALIZED, FINISHED_WITH_ERROR | 3 agree, 0 disagree, 2 idle | 78628000002823 |
+| CHEAP reads MEETS,MISSES,MEETS: it never commits to low-VOC paint | STRANGER | [0x04cea39c…](https://explorer-studio.genlayer.com/tx/0x04cea39c00589837daafefbd59e85d174747c5b09ff186711e52e0070715c8f3) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 79061500002823 |
+| CHEAP's appeal is upheld: the reason is not part of the proposal, and the 0.05 GEN appeal bond reaches BUYER from CHEAP's credit | CHEAP | [0xf4c49644…](https://explorer-studio.genlayer.com/tx/0xf4c496445f0b9f34a641785cf3d79a5c371f7f59b2b94564be0c13207a89f797) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126740500002823 |
+| MIDDLE reads MEETS,MEETS,MEETS and goes to the head of the ordered list | STRANGER | [0xc0564243…](https://explorer-studio.genlayer.com/tx/0xc05642430d805aa90c06252743bf22bb849072bef59cbd5f1c1d7f253671cc20) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 79058500002823 |
+| DEAR's challenge of MIDDLE is upheld: no requirement reads MISSES, MIDDLE keeps the lead, and DEAR's 0.05 GEN bond goes to MIDDLE's credit | DEAR | [0x346c8bc4…](https://explorer-studio.genlayer.com/tx/0x346c8bc42894d6e0596eb10a4a003d67abebd681a13bd282e453f2401595b214) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 157740500004588 |
+| DEAR reads MEETS,MEETS,MEETS; dearer than the leader, it waits to be placed | STRANGER | [0xea682a15…](https://explorer-studio.genlayer.com/tx/0xea682a158a1192487f1e285d27f1bf07846594224beea9b2eb7cd1bcae222f3a) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 79057750002823 |
+| STRANGER tries to place DEAR at the head, ahead of the cheaper MIDDLE: refused | STRANGER | [0x25db44cf…](https://explorer-studio.genlayer.com/tx/0x25db44cffdb1de0d6991ccd7dd2a07876fc6685c2beaddcdb5fd30c0ac7e8645) | FINALIZED, FINISHED_WITH_ERROR | 3 agree, 0 disagree, 2 idle | 78628000002823 |
+| STRANGER places DEAR after MIDDLE; the contract checks both neighbours; MIDDLE leads | STRANGER | [0x5bf7cb72…](https://explorer-studio.genlayer.com/tx/0x5bf7cb729c8fd43f2c21af7ea9c605cf20170b2976462e6315c4c6f28f6b3f7b) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78629250003529 |
+| STRANGER awards T1: MIDDLE's B2 wins at 0.8 GEN and 0.4 GEN goes back to BUYER in the same call | STRANGER | [0xca6c727b…](https://explorer-studio.genlayer.com/tx/0xca6c727b05e95f8603cf95f575667d38e4e267ebc4b4df19e180f592b2f0d525) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126306750002823 |
+| STRANGER tries to release the payment: refused, only the buyer | STRANGER | [0x9d2c66c5…](https://explorer-studio.genlayer.com/tx/0x9d2c66c5ba9c90c4e828ebb1c477b5e6c38d38d5b23904a8329911bf60b0be1f) | FINALIZED, FINISHED_WITH_ERROR | 3 agree, 0 disagree, 2 idle | 78628000002823 |
+| BUYER releases the 0.8 GEN to MIDDLE | BUYER | [0xefbbb994…](https://explorer-studio.genlayer.com/tx/0xefbbb99425b44a1c8f5f2e812ab43751a863d2fb2e91a05d3f49137efa01414d) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126306000002823 |
+| STRANGER tries to reclaim its over-budget bid's bond again: refused, it went back to credit at the reveal | STRANGER | [0x54f8907c…](https://explorer-studio.genlayer.com/tx/0x54f8907cd156f930c939289a39171ba15f9cb98edfd7c8611053c1555bcb0c3b) | FINALIZED, FINISHED_WITH_ERROR | 3 agree, 0 disagree, 2 idle | 78628000002823 |
+| STRANGER reclaims B1: its 0.05 GEN bond goes to CHEAP's credit | STRANGER | [0x469ff561…](https://explorer-studio.genlayer.com/tx/0x469ff56147cc9dabf55dc9926d663ff19d3489e62e03eee854ba1fee07ff7fd8) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78630000002823 |
+| STRANGER reclaims B2: its 0.05 GEN bond goes to MIDDLE's credit | STRANGER | [0x2af2e655…](https://explorer-studio.genlayer.com/tx/0x2af2e6556527ad1409b0ddf6be9acf5501caba5b707dd4cf3feab20b34b47d2e) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 78630000003529 |
+| STRANGER reclaims B3: its 0.05 GEN bond goes to DEAR's credit | STRANGER | [0x71cc113e…](https://explorer-studio.genlayer.com/tx/0x71cc113ed0e6f8f5f5d8115a91aaa17069765079b4d1f7ddcbf7bc4904036e94) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 78630000002823 |
+| CHEAP withdraws 0.05 GEN of credit | CHEAP | [0xe4c7247d…](https://explorer-studio.genlayer.com/tx/0xe4c7247df25537a294c635303111a4f708895ec4e94dc3cfff3e7bd68a75c361) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126305000002823 |
+| MIDDLE withdraws 0.1 GEN of credit | MIDDLE | [0xdf7e46fa…](https://explorer-studio.genlayer.com/tx/0xdf7e46fa9cec759e2690ee6212281a4408e603f79796c0cfe211dafdd90a90b9) | FINALIZED, FINISHED_WITH_RETURN | 4 agree, 0 disagree, 1 idle | 126305000003529 |
+| DEAR withdraws 0.05 GEN of credit | DEAR | [0x7004bd4d…](https://explorer-studio.genlayer.com/tx/0x7004bd4da69e9d978efa109e7505bcd3ecae5498baebbbe0a8a94b3b5d214583) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126305000002823 |
+| STRANGER withdraws 0.05 GEN of credit | STRANGER | [0xe536df82…](https://explorer-studio.genlayer.com/tx/0xe536df82bd1efcaa682cff9133bc4a3bd34fb957c977818a7bb00585a057c5fe) | FINALIZED, FINISHED_WITH_RETURN | 3 agree, 0 disagree, 2 idle | 126305000002823 |
 
 ## Licence
 

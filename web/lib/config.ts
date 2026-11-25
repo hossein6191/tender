@@ -3,7 +3,7 @@
 // DEMO_CONTRACT is the deployed Tender register the site reads when NEXT_PUBLIC_CONTRACT is unset. It is
 // filled in once the contract is deployed; while both are empty every page says the contract is not
 // deployed yet, and the whole site still works with NEXT_PUBLIC_MOCK=1.
-export const DEMO_CONTRACT: string = "0xcb8446a72832Bb88DFD531D531f938269E0E06dB";
+export const DEMO_CONTRACT: string = "0x746592c85bb3005484d49e9A6A0fbBc8363a6C13";
 
 export const SITE_NAME = "Tender";
 export const SITE_TAGLINE = "The cheapest bid that meets every requirement wins, and the buyer does not decide which bids those are.";

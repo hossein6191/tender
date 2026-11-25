@@ -1,4 +1,5 @@
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.4.0
+# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }
 
 """Tender: the cheapest bid that meets every requirement wins, and the buyer does not get to decide which those are.
 
@@ -67,7 +68,9 @@ import json
 import typing
 from dataclasses import dataclass
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
+from genlayer.storage import TreeMap
 
 
 ERROR_EXPECTED = "[EXPECTED]"     # a rule of this contract: deterministic on every node
@@ -139,15 +142,6 @@ KNOCKED_OUT = "knocked_out"
 TO_CREDIT, TO_BUYER, TO_CHALLENGER = "credit", "buyer", "challenger"
 
 
-@gl.evm.contract_interface
-class _Payee:
-    class View:
-        pass
-
-    class Write:
-        pass
-
-
 def _fail(message: str) -> typing.NoReturn:
     raise gl.vm.UserError(ERROR_EXPECTED + " " + message)
 
@@ -158,6 +152,11 @@ def _hex(address: typing.Any) -> str:
 
 def _low(address: typing.Any) -> str:
     return _hex(address).lower()
+
+
+def _send(address: typing.Any, amount: int) -> None:
+    """Send value to an address. The only place value leaves the contract."""
+    gl.chain.Account(Address(_hex(address))).emit_transfer(amount)
 
 
 def _sha256(text: str) -> str:
@@ -314,7 +313,7 @@ def _instant_seconds(iso: str) -> int:
 def _now() -> int:
     """The message clock in seconds, or -1. Every node reads the same instant for one transaction."""
     try:
-        raw = gl.message_raw
+        raw = gl.message.raw
         value = raw.get("datetime") if hasattr(raw, "get") else None
         return _instant_seconds(str(value)) if value else -1
     except Exception:
@@ -558,7 +557,7 @@ def _judge_round(requirements: typing.List[str], proposal: str, note: str, side:
     def validator_fn(leaders_res: gl.vm.Result) -> bool:
         return _agrees(leaders_res, leader_fn)
 
-    agreed = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+    agreed = gl.vm.run_nondet(leader_fn, validator_fn)
     if not isinstance(agreed, dict) or str(agreed.get("fingerprint", "")) != fingerprint:
         return _clean_mask("", count)
     return _clean_mask(agreed.get("mask", ""), count)
@@ -566,7 +565,7 @@ def _judge_round(requirements: typing.List[str], proposal: str, note: str, side:
 
 # ----------------------------------------------------------------- storage
 
-@allow_storage
+@gl.storage.allow
 @dataclass
 class Tender:
     """One tender, in scalars only (a collection inside a storage dataclass kills the VM).
@@ -609,7 +608,7 @@ class Tender:
     closed_at: u64
 
 
-@allow_storage
+@gl.storage.allow
 @dataclass
 class Bid:
     tender: str
@@ -646,7 +645,7 @@ class Bid:
     challenge_bond_to: str
 
 
-class Tenders(gl.Contract):
+class Tenders(gl.contract.Contract):
     tender_rows: TreeMap[str, Tender]          # "T1"             -> one tender
     bid_rows: TreeMap[str, Bid]                # "B4"             -> one bid
     bid_index_rows: TreeMap[str, str]          # "T1:2"           -> "B4", the second bid on T1, in commitment order
@@ -675,24 +674,24 @@ class Tenders(gl.Contract):
     to_buyers_total: u256
 
     def __init__(self) -> None:
-        self.tender_count = u32(0)
-        self.bid_count = u32(0)
-        self.awarded_count = u32(0)
-        self.no_award_count = u32(0)
-        self.paid_count = u32(0)
-        self.waived_count = u32(0)
-        self.assessed_count = u32(0)
-        self.appeal_count = u32(0)
-        self.overturned_count = u32(0)
-        self.challenge_count = u32(0)
-        self.knocked_out_count = u32(0)
-        self.refund_count = u32(0)
-        self.credits_held = u256(0)
-        self.budgets_held = u256(0)
-        self.bonds_held = u256(0)
-        self.paid_total = u256(0)
-        self.returned_total = u256(0)
-        self.to_buyers_total = u256(0)
+        self.tender_count = 0
+        self.bid_count = 0
+        self.awarded_count = 0
+        self.no_award_count = 0
+        self.paid_count = 0
+        self.waived_count = 0
+        self.assessed_count = 0
+        self.appeal_count = 0
+        self.overturned_count = 0
+        self.challenge_count = 0
+        self.knocked_out_count = 0
+        self.refund_count = 0
+        self.credits_held = 0
+        self.budgets_held = 0
+        self.bonds_held = 0
+        self.paid_total = 0
+        self.returned_total = 0
+        self.to_buyers_total = 0
 
     # ---------------------------------------------------------------- credit
 
@@ -709,8 +708,8 @@ class Tenders(gl.Contract):
             return self._refuse(sender, value, "send the value to hold as credit for bonds with this call")
         me = _low(sender)
         held = self._credit(me) + value
-        self.credit_rows[me] = u256(held)
-        self.credits_held = u256(int(self.credits_held) + value)
+        self.credit_rows[me] = held
+        self.credits_held = int(self.credits_held) + value
         return json.dumps({"ok": True, "deposited": str(value), "credit": str(held)})
 
     @gl.public.write
@@ -727,10 +726,10 @@ class Tenders(gl.Contract):
         amount = _whole(amount_atto)
         if amount < 1 or amount > held:
             _fail("withdraw 1 to " + str(held) + " atto, the credit this address holds, written in digits")
-        self.credit_rows[me] = u256(held - amount)
-        self.credits_held = u256(int(self.credits_held) - amount)
+        self.credit_rows[me] = held - amount
+        self.credits_held = int(self.credits_held) - amount
         # The money moves after everything above is written.
-        _Payee(sender).emit_transfer(value=u256(amount))
+        _send(sender, amount)
         return json.dumps({"ok": True, "returned": str(amount), "credit": str(held - amount)})
 
     # ------------------------------------------------------------------ open
@@ -778,17 +777,17 @@ class Tenders(gl.Contract):
                        "the work is never due before the last appeal window can close")
         if problem:
             return self._refuse(sender, value, problem)
-        self.tender_count = u32(int(self.tender_count) + 1)
+        self.tender_count = int(self.tender_count) + 1
         tid = "T" + str(int(self.tender_count))
         self.tender_rows[tid] = Tender(
             buyer=sender, title=title.strip(), scope=scope.strip(), requirements=SEP.join(reqs),
-            requirement_count=u32(len(reqs)), budget=u256(value), bid_bond=u256(bond), opened_at=u64(now),
-            bid_by=u64(bid_until), reveal_by=u64(reveal_until), review_by=u64(review_until), complete_by=u64(due),
-            status=OPEN, bids=u32(0), eligible=u32(0), over_budget=u32(0), forfeited=u32(0), assessed=u32(0),
-            compliant=u32(0), appeals=u32(0), challenges=u32(0), appeal_until=u64(0), head="", placed=u32(0),
-            winner="", price=u256(0), returned=u256(0), awarded_at=u64(0), disputed_at=u64(0), closed_at=u64(0),
+            requirement_count=len(reqs), budget=value, bid_bond=bond, opened_at=now,
+            bid_by=bid_until, reveal_by=reveal_until, review_by=review_until, complete_by=due,
+            status=OPEN, bids=0, eligible=0, over_budget=0, forfeited=0, assessed=0,
+            compliant=0, appeals=0, challenges=0, appeal_until=0, head="", placed=0,
+            winner="", price=0, returned=0, awarded_at=0, disputed_at=0, closed_at=0,
         )
-        self.budgets_held = u256(int(self.budgets_held) + value)
+        self.budgets_held = int(self.budgets_held) + value
         self._index(_low(sender), tid)
         return json.dumps({"ok": True, "tender": tid, "budget": str(value), "bid_bond": str(bond),
                            "requirements": len(reqs), "bid_by": bid_until, "reveal_by": reveal_until,
@@ -844,21 +843,21 @@ class Tenders(gl.Contract):
         if problem:
             return self._refuse(sender, value, problem)
         if value == 0:
-            self.credit_rows[me] = u256(held - bond)
-            self.credits_held = u256(int(self.credits_held) - bond)
-        self.bonds_held = u256(int(self.bonds_held) + bond)
-        self.bid_count = u32(int(self.bid_count) + 1)
+            self.credit_rows[me] = held - bond
+            self.credits_held = int(self.credits_held) - bond
+        self.bonds_held = int(self.bonds_held) + bond
+        self.bid_count = int(self.bid_count) + 1
         bid_id = "B" + str(int(self.bid_count))
-        t.bids = u32(int(t.bids) + 1)
+        t.bids = int(t.bids) + 1
         number = int(t.bids)
         self.bid_index_rows[tid + ":" + str(number)] = bid_id
         self.bidder_rows[key] = bid_id
         self.commitment_rows[tid + ":" + digest] = bid_id
         self._index(me, tid)
         self.bid_rows[bid_id] = Bid(
-            tender=tid, bidder=sender, number=u32(number), commitment=digest, at=u64(now), bond=u256(bond),
-            status=COMMITTED, price=u256(0), proposal="", salt="", revealed_at=u64(0), mask="", fingerprint="",
-            assessed_at=u64(0), compliant=False, appeal_until=u64(0), appeal="", appeal_reason="", appeal_mask="",
+            tender=tid, bidder=sender, number=number, commitment=digest, at=now, bond=bond,
+            status=COMMITTED, price=0, proposal="", salt="", revealed_at=0, mask="", fingerprint="",
+            assessed_at=0, compliant=False, appeal_until=0, appeal="", appeal_reason="", appeal_mask="",
             appeal_fingerprint="", appeal_bond_to="", bond_to="", placed=False, prev="", next="", challenge="",
             challenger="", challenge_reason="", challenge_mask="", replaced_mask="", challenge_fingerprint="",
             challenge_bond_to="",
@@ -902,23 +901,23 @@ class Tenders(gl.Contract):
             _fail("this price, proposal and salt do not match the commitment of " + bid_id)
         me = _low(x.bidder)
         bond = int(x.bond)
-        x.price = u256(price)
+        x.price = price
         x.proposal = proposal
         x.salt = salt
-        x.revealed_at = u64(now)
+        x.revealed_at = now
         if price > int(t.budget):
             x.status = OVER_BUDGET
             x.bond_to = TO_CREDIT
-            self.bonds_held = u256(int(self.bonds_held) - bond)
-            self.credit_rows[me] = u256(self._credit(me) + bond)
-            self.credits_held = u256(int(self.credits_held) + bond)
-            t.over_budget = u32(int(t.over_budget) + 1)
+            self.bonds_held = int(self.bonds_held) - bond
+            self.credit_rows[me] = self._credit(me) + bond
+            self.credits_held = int(self.credits_held) + bond
+            t.over_budget = int(t.over_budget) + 1
             return json.dumps({"ok": False, "bid": bid_id, "status": OVER_BUDGET, "price": str(price),
                                "budget": str(int(t.budget)), "bond": str(bond), "credit": str(self._credit(me)),
                                "reason": "the price is over the budget of " + tid + ", so this bid cannot win; "
                                "its bond is back in credit"})
         x.status = REVEALED
-        t.eligible = u32(int(t.eligible) + 1)
+        t.eligible = int(t.eligible) + 1
         return json.dumps({"ok": True, "bid": bid_id, "status": REVEALED, "price": str(price), "bond": str(bond),
                            "bond_held_until": "the tender is decided", "review_by": int(t.review_by)})
 
@@ -942,11 +941,11 @@ class Tenders(gl.Contract):
         bond = int(x.bond)
         x.status = FORFEITED
         x.bond_to = TO_BUYER
-        t.forfeited = u32(int(t.forfeited) + 1)
-        self.bonds_held = u256(int(self.bonds_held) - bond)
-        self.to_buyers_total = u256(int(self.to_buyers_total) + bond)
+        t.forfeited = int(t.forfeited) + 1
+        self.bonds_held = int(self.bonds_held) - bond
+        self.to_buyers_total = int(self.to_buyers_total) + bond
         # The money moves after everything above is written: one transfer, to the buyer.
-        _Payee(t.buyer).emit_transfer(value=u256(bond))
+        _send(t.buyer, bond)
         return json.dumps({"ok": True, "bid": bid_id, "status": FORFEITED, "bond": str(bond), "to": "buyer"})
 
     # ---------------------------------------------------------------- judge
@@ -979,13 +978,13 @@ class Tenders(gl.Contract):
         mask = _judge_round(reqs, str(x.proposal), "", SIDE_NONE)
         x.mask = mask
         x.fingerprint = _fingerprint(reqs, str(x.proposal), "", SIDE_NONE)
-        x.assessed_at = u64(now)
-        t.assessed = u32(int(t.assessed) + 1)
-        self.assessed_count = u32(int(self.assessed_count) + 1)
+        x.assessed_at = now
+        t.assessed = int(t.assessed) + 1
+        self.assessed_count = int(self.assessed_count) + 1
         self._open_window(t, x, now)
         if _meets_all(mask, len(reqs)):
             x.compliant = True
-            t.compliant = u32(int(t.compliant) + 1)
+            t.compliant = int(t.compliant) + 1
             self._try_head(t, bid_id, x)
         return json.dumps({"ok": True, "bid": bid_id, "tender": tid, "mask": mask, "compliant": bool(x.compliant),
                            "fingerprint": str(x.fingerprint), "window_until": int(x.appeal_until),
@@ -1035,15 +1034,15 @@ class Tenders(gl.Contract):
         x.appeal_reason = note
         x.appeal_mask = mask
         x.appeal_fingerprint = _fingerprint(reqs, str(x.proposal), note, SIDE_BIDDER)
-        t.appeals = u32(int(t.appeals) + 1)
-        self.appeal_count = u32(int(self.appeal_count) + 1)
+        t.appeals = int(t.appeals) + 1
+        self.appeal_count = int(self.appeal_count) + 1
         if _meets_all(mask, len(reqs)):
             x.appeal = OVERTURNED
             x.appeal_bond_to = TO_CREDIT
             x.mask = mask
             x.compliant = True
-            t.compliant = u32(int(t.compliant) + 1)
-            self.overturned_count = u32(int(self.overturned_count) + 1)
+            t.compliant = int(t.compliant) + 1
+            self.overturned_count = int(self.overturned_count) + 1
             self._open_window(t, x, now)
             self._try_head(t, bid_id, x)
             return json.dumps({"ok": True, "bid": bid_id, "appeal": OVERTURNED, "mask": mask, "compliant": True,
@@ -1051,11 +1050,11 @@ class Tenders(gl.Contract):
                                "placed": bool(x.placed), "leader": str(t.head)})
         x.appeal = UPHELD
         x.appeal_bond_to = TO_BUYER
-        self.credit_rows[me] = u256(held - bond)
-        self.credits_held = u256(int(self.credits_held) - bond)
-        self.to_buyers_total = u256(int(self.to_buyers_total) + bond)
+        self.credit_rows[me] = held - bond
+        self.credits_held = int(self.credits_held) - bond
+        self.to_buyers_total = int(self.to_buyers_total) + bond
         # The money moves after everything above is written: one transfer, to the buyer.
-        _Payee(t.buyer).emit_transfer(value=u256(bond))
+        _send(t.buyer, bond)
         return json.dumps({"ok": True, "bid": bid_id, "appeal": UPHELD, "mask": str(x.mask), "appeal_mask": mask,
                            "compliant": False, "bond": str(bond), "bond_to": "buyer", "credit": str(held - bond)})
 
@@ -1107,8 +1106,8 @@ class Tenders(gl.Contract):
         x.challenge_reason = note
         x.challenge_mask = mask
         x.challenge_fingerprint = _fingerprint(reqs, str(x.proposal), note, SIDE_CHALLENGER)
-        t.challenges = u32(int(t.challenges) + 1)
-        self.challenge_count = u32(int(self.challenge_count) + 1)
+        t.challenges = int(t.challenges) + 1
+        self.challenge_count = int(self.challenge_count) + 1
         bidder = _low(x.bidder)
         if _misses_any(mask):
             taken = int(x.bond)
@@ -1118,20 +1117,20 @@ class Tenders(gl.Contract):
             x.mask = mask
             x.compliant = False
             x.bond_to = TO_CHALLENGER
-            t.compliant = u32(int(t.compliant) - 1)
+            t.compliant = int(t.compliant) - 1
             if bool(x.placed):
                 self._unlink(t, x)
-            self.bonds_held = u256(int(self.bonds_held) - taken)
-            self.credit_rows[me] = u256(held + taken)
-            self.credits_held = u256(int(self.credits_held) + taken)
-            self.knocked_out_count = u32(int(self.knocked_out_count) + 1)
+            self.bonds_held = int(self.bonds_held) - taken
+            self.credit_rows[me] = held + taken
+            self.credits_held = int(self.credits_held) + taken
+            self.knocked_out_count = int(self.knocked_out_count) + 1
             return json.dumps({"ok": True, "bid": bid_id, "challenge": KNOCKED_OUT, "mask": mask,
                                "replaced_mask": str(x.replaced_mask), "taken": str(taken), "credit": str(held + taken),
                                "leader": str(t.head)})
         x.challenge = UPHELD
         x.challenge_bond_to = "bidder"
-        self.credit_rows[me] = u256(held - bond)
-        self.credit_rows[bidder] = u256(self._credit(bidder) + bond)
+        self.credit_rows[me] = held - bond
+        self.credit_rows[bidder] = self._credit(bidder) + bond
         return json.dumps({"ok": True, "bid": bid_id, "challenge": UPHELD, "mask": str(x.mask),
                            "challenge_mask": mask, "bond": str(bond), "bond_to": "bidder", "credit": str(held - bond),
                            "leader": str(t.head)})
@@ -1188,9 +1187,9 @@ class Tenders(gl.Contract):
         me = _low(x.bidder)
         bond = int(x.bond)
         x.bond_to = TO_CREDIT
-        self.bonds_held = u256(int(self.bonds_held) - bond)
-        self.credit_rows[me] = u256(self._credit(me) + bond)
-        self.credits_held = u256(int(self.credits_held) + bond)
+        self.bonds_held = int(self.bonds_held) - bond
+        self.credit_rows[me] = self._credit(me) + bond
+        self.credits_held = int(self.credits_held) + bond
         return json.dumps({"ok": True, "bid": bid_id, "bond": str(bond), "credit": str(self._credit(me))})
 
     # ----------------------------------------------------------------- award
@@ -1222,27 +1221,27 @@ class Tenders(gl.Contract):
             _fail(str(int(t.compliant) - int(t.placed)) + " compliant bids on " + tid + " are not placed yet; "
                   "anyone may place() them")
         budget = int(t.budget)
-        t.awarded_at = u64(now)
+        t.awarded_at = now
         best = str(t.head)
         if best:
             price = int(self.bid_rows[best].price)
             back = budget - price
             t.status = AWARDED
             t.winner = best
-            t.price = u256(price)
-            self.awarded_count = u32(int(self.awarded_count) + 1)
+            t.price = price
+            self.awarded_count = int(self.awarded_count) + 1
         else:
             price = 0
             back = budget
             t.status = NO_AWARD
-            t.closed_at = u64(now)
-            self.no_award_count = u32(int(self.no_award_count) + 1)
-        t.returned = u256(back)
-        self.budgets_held = u256(int(self.budgets_held) - back)
-        self.returned_total = u256(int(self.returned_total) + back)
+            t.closed_at = now
+            self.no_award_count = int(self.no_award_count) + 1
+        t.returned = back
+        self.budgets_held = int(self.budgets_held) - back
+        self.returned_total = int(self.returned_total) + back
         # The money moves after everything above is written: at most one transfer, to the buyer.
         if back > 0:
-            _Payee(t.buyer).emit_transfer(value=u256(back))
+            _send(t.buyer, back)
         return json.dumps({"ok": True, "tender": tid, "status": str(t.status), "winner": best, "price": str(price),
                            "returned": str(back), "claimable_at": self._claimable_at(t) if best else 0})
 
@@ -1279,7 +1278,7 @@ class Tenders(gl.Contract):
         if now >= int(t.complete_by) + GRACE_SECONDS:
             _fail("the winner's claim on " + tid + " opened at " + str(int(t.complete_by) + GRACE_SECONDS)
                   + "; a dispute must come before it")
-        t.disputed_at = u64(now)
+        t.disputed_at = now
         return json.dumps({"ok": True, "tender": tid, "disputed_at": now, "claimable_at": self._claimable_at(t)})
 
     @gl.public.write
@@ -1294,12 +1293,12 @@ class Tenders(gl.Contract):
         now = _clock()
         price = int(t.price)
         t.status = WAIVED
-        t.closed_at = u64(now)
-        self.budgets_held = u256(int(self.budgets_held) - price)
-        self.returned_total = u256(int(self.returned_total) + price)
-        self.waived_count = u32(int(self.waived_count) + 1)
+        t.closed_at = now
+        self.budgets_held = int(self.budgets_held) - price
+        self.returned_total = int(self.returned_total) + price
+        self.waived_count = int(self.waived_count) + 1
         # The money moves after everything above is written: one transfer, to the buyer.
-        _Payee(t.buyer).emit_transfer(value=u256(price))
+        _send(t.buyer, price)
         return json.dumps({"ok": True, "tender": tid, "status": WAIVED, "returned": str(price)})
 
     @gl.public.write
@@ -1597,7 +1596,7 @@ class Tenders(gl.Contract):
     def _index(self, who: str, tid: str) -> None:
         """Add one tender to one lower-case address's list. Never raises."""
         n = self._party_count(who) + 1
-        self.party_count_rows[who] = u32(n)
+        self.party_count_rows[who] = n
         self.party_rows[who + ":" + str(n)] = tid
 
     def _is_rival(self, tid: str, me: str) -> bool:
@@ -1607,9 +1606,9 @@ class Tenders(gl.Contract):
 
     def _open_window(self, t: typing.Any, x: typing.Any, now: int) -> None:
         """Open a bid's twenty-minute appeal or challenge window, and make the award wait for it."""
-        x.appeal_until = u64(now + APPEAL_SECONDS)
+        x.appeal_until = now + APPEAL_SECONDS
         if now + APPEAL_SECONDS > int(t.appeal_until):
-            t.appeal_until = u64(now + APPEAL_SECONDS)
+            t.appeal_until = now + APPEAL_SECONDS
 
     def _try_head(self, t: typing.Any, bid_id: str, x: typing.Any) -> None:
         """Place a bid just judged all MEETS at the head when the list is empty or it beats the leader."""
@@ -1631,7 +1630,7 @@ class Tenders(gl.Contract):
         if nxt:
             self.bid_rows[nxt].prev = bid_id
         x.placed = True
-        t.placed = u32(int(t.placed) + 1)
+        t.placed = int(t.placed) + 1
 
     def _unlink(self, t: typing.Any, x: typing.Any) -> None:
         """Take a knocked-out bid out of the list: its neighbours are joined, and the next one may lead."""
@@ -1645,7 +1644,7 @@ class Tenders(gl.Contract):
         x.prev = ""
         x.next = ""
         x.placed = False
-        t.placed = u32(int(t.placed) - 1)
+        t.placed = int(t.placed) - 1
 
     def _claimable_at(self, t: typing.Any) -> int:
         """When the winner may claim: complete_by plus the grace, or the end of a dispute hold if that is later."""
@@ -1659,12 +1658,12 @@ class Tenders(gl.Contract):
         w = self.bid_rows[str(t.winner)]
         price = int(t.price)
         t.status = PAID
-        t.closed_at = u64(now)
-        self.budgets_held = u256(int(self.budgets_held) - price)
-        self.paid_total = u256(int(self.paid_total) + price)
-        self.paid_count = u32(int(self.paid_count) + 1)
+        t.closed_at = now
+        self.budgets_held = int(self.budgets_held) - price
+        self.paid_total = int(self.paid_total) + price
+        self.paid_count = int(self.paid_count) + 1
         # The money moves after everything above is written: one transfer, to the winner.
-        _Payee(w.bidder).emit_transfer(value=u256(price))
+        _send(w.bidder, price)
         return json.dumps({"ok": True, "tender": tid, "status": PAID, "paid": str(price), "to": _low(w.bidder),
                            "how": how})
 
@@ -1686,7 +1685,7 @@ class Tenders(gl.Contract):
 
     def _refuse(self, sender: typing.Any, value: int, reason: str) -> str:
         """Return everything that was sent and say why. Never raises."""
-        self.refund_count = u32(int(self.refund_count) + 1)
+        self.refund_count = int(self.refund_count) + 1
         if value > 0:
-            _Payee(sender).emit_transfer(value=u256(value))
+            _send(sender, value)
         return json.dumps({"ok": False, "reason": reason, "returned": str(value)})

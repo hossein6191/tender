@@ -439,6 +439,8 @@ export type RawTx = {
   };
   consensus_history?: unknown;
   result?: unknown;
+  /** FINISHED_WITH_RETURN | FINISHED_WITH_ERROR, on Studio v0.123 */
+  txExecutionResultName?: string;
   [k: string]: unknown;
 };
 
@@ -523,7 +525,9 @@ export function decodeTx(tx: RawTx | null | undefined): DecodedTx {
   const receipt = leaderReceiptOf(tx);
   const text = receipt?.result ? base64ToText(receipt.result) : "";
   const result = jsonFromText(text);
-  const exec = receipt?.execution_result ? String(receipt.execution_result).toUpperCase() : null;
+  // Studio v0.123 names the execution result on the transaction itself; the leader's receipt is the fallback
+  const named = typeof tx.txExecutionResultName === "string" ? tx.txExecutionResultName : "";
+  const exec = named === "FINISHED_WITH_ERROR" ? "ERROR" : named === "FINISHED_WITH_RETURN" ? "SUCCESS" : receipt?.execution_result ? String(receipt.execution_result).toUpperCase() : null;
   const undetermined = isUndetermined(tx, votes);
   const applied =
     status === "CANCELED" || undetermined

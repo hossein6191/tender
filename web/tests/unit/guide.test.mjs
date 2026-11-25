@@ -72,4 +72,6 @@ test("the site's own waits", () => {
   }
   for (const m of ["asking", "open", "bid", "reveal", "assess", "place", "award", "complete", "reclaim"]) full(demoGuide(m));
   assert.match(sendingGuide("assess").now, /both orders/);
+  // where the visitor signs, the small network fee is named
+  for (const fn of ["bid", "open_tender", "withdraw"]) assert.match(signGuide(fn).money, /small network fee.*0\.1 GEN/);
 });

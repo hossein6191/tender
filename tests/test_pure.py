@@ -19,28 +19,21 @@ import sys
 import types
 
 if "genlayer" not in sys.modules:
-    stub = types.ModuleType("genlayer")
-
-    class _Any:
-        def __getattr__(self, n): return _Any()
-        def __call__(self, *a, **k): return _Any()
-        def __getitem__(self, n): return _Any()
+    # The runtime stub, written to the GenVM v0.4 API: `import genlayer as gl`, `genlayer.types`, `genlayer.storage`.
+    gl_mod = types.ModuleType("genlayer")
+    types_mod = types.ModuleType("genlayer.types")
+    storage_mod = types.ModuleType("genlayer.storage")
 
     class _UserError(Exception):
-        def __init__(self, message=""):
-            super().__init__(message)
-            self.message = message
+        def __init__(self, data=""):
+            super().__init__(data)
+            self.data = data
 
     class _Return:
         def __init__(self, calldata=None): self.calldata = calldata
 
     class _Result:
-        def __init__(self, message=""): self.message = message
-
-    class _VM:
-        UserError = _UserError
-        Return = _Return
-        Result = _Result
+        def __init__(self, data=""): self.data = data
 
     class _Public:
         view = staticmethod(lambda f: f)
@@ -50,26 +43,29 @@ if "genlayer" not in sys.modules:
             payable = staticmethod(lambda f: f)
         write = _Write()
 
-    class _GL:
-        vm = _VM()
-        public = _Public()
-
-        class Contract: pass
-
-        def __getattr__(self, n): return _Any()
-
     class _T:
         def __init__(self, *a, **k): pass
         def __class_getitem__(cls, item): return cls
 
-    stub.gl = _GL()
-    stub.allow_storage = lambda c: c
-    stub.Address = str
-    stub.DynArray = _T
-    stub.TreeMap = _T
-    stub.u256 = int; stub.u32 = int; stub.u64 = int; stub.i64 = int
-    stub.__all__ = ["gl", "allow_storage", "Address", "DynArray", "TreeMap", "u256", "u32", "u64", "i64"]
-    sys.modules["genlayer"] = stub
+    class _Contract:
+        pass
+
+    types_mod.Address = str
+    types_mod.u256 = int; types_mod.u64 = int; types_mod.u32 = int
+    types_mod.__all__ = ["Address", "u256", "u64", "u32"]
+    storage_mod.TreeMap = _T
+    storage_mod.allow = lambda c: c
+    gl_mod.types = types_mod
+    gl_mod.storage = storage_mod
+    gl_mod.public = _Public()
+    gl_mod.contract = types.SimpleNamespace(Contract=_Contract)
+    gl_mod.vm = types.SimpleNamespace(UserError=_UserError, Return=_Return, Result=_Result, run_nondet=None)
+    gl_mod.nondet = types.SimpleNamespace(exec_prompt=None)
+    gl_mod.chain = types.SimpleNamespace(Account=None)
+    gl_mod.message = types.SimpleNamespace(sender_address="", value=0, contract_address="", raw={})
+    sys.modules["genlayer"] = gl_mod
+    sys.modules["genlayer.types"] = types_mod
+    sys.modules["genlayer.storage"] = storage_mod
 
 import pytest  # noqa: E402
 
@@ -135,8 +131,8 @@ def commit(price, proposal, salt):
     return hashlib.sha256((str(price) + "|" + proposal + "|" + salt).encode()).hexdigest()
 
 
-class _Payee:
-    """Stands in for the value-transfer interface; records every transfer."""
+class _Account:
+    """Stands in for gl.chain.Account; records every transfer."""
     def __init__(self, to): self.to = to
 
     def emit_transfer(self, value):
@@ -144,12 +140,12 @@ class _Payee:
         OUT["out"] += int(value)
 
 
-tc._Payee = _Payee
+gl.chain.Account = _Account
 
 
 def _as(sender, value=0, second=0, clock=True):
-    gl.message = types.SimpleNamespace(sender_address=sender, value=value, contract_address=HERE)
-    gl.message_raw = {"datetime": at(second)} if clock else {"datetime": ""}
+    gl.message = types.SimpleNamespace(sender_address=sender, value=value, contract_address=HERE,
+                                       raw={"datetime": at(second)} if clock else {"datetime": ""})
 
 
 def _fresh():
@@ -171,7 +167,7 @@ def _send(c, fn, *args, by, value=0, second=0, clock=True):
         return json.loads(getattr(c, fn)(*args))
     except UserError as e:
         BANK["in"] -= value            # a raise reverts the call, value included
-        return {"raised": e.message}
+        return {"raised": e.data}
 
 
 def _balance():
@@ -239,14 +235,14 @@ def model(fn=None, garbage=False, boom=None):
 
 
 def network(leader, validators):
-    """run_nondet_unsafe with a world per node: the leader's model, then each validator's."""
+    """run_nondet with a world per node: the leader's model, then each validator's."""
     def run(leader_fn, validator_fn):
         gl.nondet = types.SimpleNamespace(
             exec_prompt=lambda p, response_format=None: (CALLS.append(p), leader(p, response_format))[1])
         try:
             res = gl.vm.Return(leader_fn())
         except Exception as e:
-            res = gl.vm.Result(str(getattr(e, "message", e)))
+            res = gl.vm.Result(str(getattr(e, "data", e)))
         votes = []
         for v in validators:
             gl.nondet = types.SimpleNamespace(exec_prompt=v)
@@ -260,7 +256,7 @@ def network(leader, validators):
 def _net(leader=None, *validators):
     CALLS.clear()
     leader = leader or model()
-    gl.vm.run_nondet_unsafe = network(leader, list(validators) or [leader, leader, leader, leader])
+    gl.vm.run_nondet = network(leader, list(validators) or [leader, leader, leader, leader])
 
 
 def _open(c, by=BUYER, value=BUDGET, title=TITLE, scope=SCOPE, reqs=REQUIREMENTS, bond=str(BOND), times=None,
@@ -559,7 +555,7 @@ class TestConsensus:
     def test_a_leader_returning_another_fingerprint_stores_unclear(self):
         def run(leader_fn, validator_fn):
             return {"mask": "MEETS,MEETS,MEETS", "fingerprint": "0" * 64}
-        gl.vm.run_nondet_unsafe = run
+        gl.vm.run_nondet = run
         assert tc._judge_round(REQS, P_MIDDLE, "", "") == "UNCLEAR,UNCLEAR,UNCLEAR"
 
     def test_the_fingerprint_binds_every_byte_judged(self):
@@ -801,7 +797,7 @@ class TestAssess:
         before = _snapshot(c)
         lenient = model(lambda r, p, n, o: "MEETS")
         CALLS.clear()
-        gl.vm.run_nondet_unsafe = network(model(), [lenient] * 4)
+        gl.vm.run_nondet = network(model(), [lenient] * 4)
         _as(STRANGER, 0, IN_REVIEW)
         with pytest.raises(RuntimeError):
             c.assess(b1)
@@ -1630,7 +1626,7 @@ class TestStaticRules:
                       and ast.unparse(n).startswith(("self.", "t."))]
             assert refusal and writes and min(writes) > max(refusal), fn.name
         refuse = ast.unparse(_fn(TREE, "_refuse"))
-        assert "emit_transfer" in refuse and "'ok': False" in refuse and "'returned'" in refuse
+        assert "_send(" in refuse and "'ok': False" in refuse and "'returned'" in refuse
 
     def test_the_model_runs_only_in_assess_and_appeal_after_every_door(self):
         rounds = [f.name for f in _decorated(TREE, "gl.public.write") if "_judge_round" in _reached(TREE, f)]
@@ -1646,7 +1642,7 @@ class TestStaticRules:
         nondet = [n for n in ast.walk(TREE) if isinstance(n, ast.Call) and ast.unparse(n.func).startswith("gl.nondet.")]
         leader = _fn(TREE, "leader_fn")
         assert len(nondet) == 2 and all(n in list(ast.walk(leader)) for n in nondet)
-        assert len(_calls(TREE, "gl.vm.run_nondet_unsafe")) == 1
+        assert len(_calls(TREE, "gl.vm.run_nondet")) == 1
 
     def test_non_payable_refusals_are_expected_user_errors(self):
         assert ast.unparse(_fn(TREE, "_fail")).count("gl.vm.UserError(ERROR_EXPECTED + ' ' + message)") == 1
@@ -1698,7 +1694,9 @@ class TestStaticRules:
             text = ast.unparse(fn)
             assert "bid_index_rows[" not in text or fn.name == "bid", fn.name
         pays = lambda name: [n for n in ast.walk(_fn(TREE, name)) if isinstance(n, ast.Call)
-                             and ast.unparse(n.func).endswith("emit_transfer")]
+                             and ast.unparse(n.func) == "_send"]
+        # value leaves the contract in one place only: _send, through gl.chain.Account(...).emit_transfer
+        assert SRC.count("emit_transfer(") == 1 and "emit_transfer(" in ast.unparse(_fn(TREE, "_send"))
         for name, n in (("withdraw", 1), ("forfeit", 1), ("appeal", 1), ("award", 1), ("waive", 1), ("_pay", 1),
                         ("_refuse", 1), ("reveal", 0), ("assess", 0), ("bid", 0), ("open_tender", 0),
                         ("dispute", 0), ("complete", 0), ("claim_payment", 0),
@@ -1770,5 +1768,14 @@ class TestStaticRules:
         assert "datetime" not in [a.name for n in ast.walk(TREE) if isinstance(n, ast.Import) for a in n.names]
         assert not re.search(r"(?<![a-z_])float\(", SRC)
 
-    def test_the_first_line_pins_the_runner(self):
-        assert SRC.split("\n")[0] == '# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }'
+    def test_the_first_two_lines_pin_the_v04_runner(self):
+        lines = SRC.split("\n")
+        assert lines[0] == "# v0.4.0"
+        assert lines[1] == '# { "Depends": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0" }'
+
+    def test_the_current_api_and_none_of_the_legacy_names(self):
+        assert "import genlayer as gl" in SRC and "gl.contract.Contract" in SRC
+        assert "from genlayer import *" not in SRC
+        for legacy in ("run_nondet_unsafe", "__receive__", "allow_storage", "(gl.Contract)", ".message_raw", "u256(",
+                       "u64(", "u32(", "evm.contract_interface", "_Payee"):
+            assert legacy not in SRC, legacy

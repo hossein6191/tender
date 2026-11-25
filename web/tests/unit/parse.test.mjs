@@ -64,3 +64,12 @@ test("the mask in words", () => {
   assert.equal(maskSummary("MISSES,UNCLEAR,MISSES", 3), "misses requirements 1 and 3; unclear on requirement 2");
   assert.equal(maskSummary("", 3), "not assessed yet");
 });
+
+test("Studio v0.123: the execution result named on the transaction decides a refusal, the receipt only as a fallback", async () => {
+  const { decodeTx } = await import("../../lib/rpc.ts");
+  const body = Buffer.from('{"ok": true}').toString("base64");
+  const tx = (named, leader) => ({ status: "FINALIZED", txExecutionResultName: named, consensus_data: { votes: { a: "agree", b: "agree", c: "agree" }, leader_receipt: [{ result: body, execution_result: leader }] } });
+  assert.equal(decodeTx(tx("FINISHED_WITH_ERROR", "SUCCESS")).exec, "ERROR");
+  assert.equal(decodeTx(tx("FINISHED_WITH_RETURN", "ERROR")).exec, "SUCCESS");
+  assert.equal(decodeTx(tx(undefined, "ERROR")).exec, "ERROR");
+});
